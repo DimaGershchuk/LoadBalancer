@@ -22,7 +22,7 @@ public class LoadBalancer{
         this.maxRequestsPerContainer = maxRequestsPerContainer;
 
         try {
-            mqttClient = new MqttClient("tcp://localhost:1883", MqttClient.generateClientId());
+            mqttClient = new MqttClient("tcp://mqtt-broker:1883", MqttClient.generateClientId());
             mqttClient.connect();
             mqttClient.subscribe("load-balancer/file-operation", this::handleMqttMessage);
         } catch (MqttException e) {

@@ -42,6 +42,10 @@ public class Request {
     public String toJson() {
         return new Gson().toJson(this);
     }
+    
+    public List<String> getChunks() {
+        return chunks;
+    }
 
     public String getId() {
         return fileId;

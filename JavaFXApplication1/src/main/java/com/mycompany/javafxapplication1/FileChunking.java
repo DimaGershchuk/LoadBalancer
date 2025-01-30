@@ -17,8 +17,9 @@ import javax.crypto.spec.SecretKeySpec;
  */
 public class FileChunking {
     
-    public static void chunkFile(File inputFile, String outputDir, int numberChunks, String fileId) throws NoSuchAlgorithmException, FileNotFoundException, IOException, ClassNotFoundException, Exception{
-           
+    
+        public static List<String> chunkFile(File inputFile, String outputDir, int numberChunks, String fileId) throws NoSuchAlgorithmException, FileNotFoundException, IOException, ClassNotFoundException, Exception {
+        
         KeyGenerator keyGen = KeyGenerator.getInstance("AES");
         keyGen.init(256);
         SecretKey secretKey = keyGen.generateKey();
@@ -36,38 +37,43 @@ public class FileChunking {
             dir.mkdir();
         }
         
-        for(int i = 0; i < numberChunks; i++){
+        List<String> chunkNames = new ArrayList<>();  // Список для збереження імен чанків
+        
+        for (int i = 0; i < numberChunks; i++) {
             int start = i * chunkSize;
             int end = Math.min(start + chunkSize, encryptedFileBytes.length);
             byte[] chunk = Arrays.copyOfRange(encryptedFileBytes, start, end);
 
-            // Створення файлу для кожної частини
+            // Генерація унікального імені для кожного чанку
             String chunkName = UUID.randomUUID().toString();
             File chunkFile = new File(outputDir, chunkName);
-
+            
             try (FileOutputStream fos = new FileOutputStream(chunkFile)) {
                 fos.write(chunk);
             }
 
+            chunkNames.add(chunkName); // Додаємо ім'я чанка у список
             
             DB db = new DB();
-            db.addChunkMetaData(chunkName, fileId); 
+            db.addChunkMetaData(chunkName, fileId);
         }
+        
+        return chunkNames;  // Повертаємо список імен чанків
     }
 
-        private static byte[] encryptFile(String inputFile, SecretKey key) throws Exception {
+    private static byte[] encryptFile(String inputFile, SecretKey key) throws Exception {
         Cipher cipher = Cipher.getInstance("AES");
         cipher.init(Cipher.ENCRYPT_MODE, key);
         byte[] fileBytes = Files.readAllBytes(Paths.get(inputFile));
         return cipher.doFinal(fileBytes);
-        }
+    }
 
-        private static byte[] encryptKey(SecretKey key) throws Exception {
+    private static byte[] encryptKey(SecretKey key) throws Exception {
         Cipher cipher = Cipher.getInstance("RSA");
         KeyPairGenerator keyPairGen = KeyPairGenerator.getInstance("RSA");
         keyPairGen.initialize(2048);
         PublicKey publicKey = keyPairGen.generateKeyPair().getPublic();
         cipher.init(Cipher.ENCRYPT_MODE, publicKey);
         return cipher.doFinal(key.getEncoded());
-        }
+    }
 }

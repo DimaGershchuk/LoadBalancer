@@ -582,9 +582,9 @@ public class DB {
 
              ResultSet rs = pstmt.executeQuery();
             if (rs.next()) {
-                return rs.getBoolean("can_write"); // Повертаємо право can_write
+                return rs.getBoolean("can_write"); 
             } else {
-                return false; // Якщо запис відсутній, права на запис немає
+                return false; 
             }
 
             }catch (SQLException e) {

@@ -14,6 +14,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.Scanner;
 import java.util.logging.Level;
@@ -38,6 +40,7 @@ import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.text.Text;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+import org.eclipse.paho.client.mqttv3.MqttException;
 
 
 /**
@@ -92,9 +95,24 @@ public class FileselectionController {
     
     private File selectedFile;
    
+    private MQTTClient mqttClient;
+    private LoadBalancer loadBalancer;
     
     private int userId;
     private DB db;
+
+    public FileselectionController() throws MqttException {
+    this.mqttClient = new MQTTClient();
+
+    List<Container> containers = new ArrayList<>();
+    containers.add(new Container("container1", "soft40051-files-container1", 22, "ntu-user", "ntu-user"));
+    containers.add(new Container("container2", "soft40051-files-container2", 22, "ntu-user", "ntu-user"));
+    containers.add(new Container("container3", "soft40051-files-container3", 22, "ntu-user", "ntu-user"));
+    containers.add(new Container("container4", "soft40051-files-container4", 22, "ntu-user", "ntu-user"));
+
+    this.loadBalancer = new LoadBalancer(containers, 2);
+    
+    }
             
     
     
@@ -122,46 +140,42 @@ public class FileselectionController {
     private void selectBtnHandler(ActionEvent event) throws IOException, ClassNotFoundException, SQLException, FileNotFoundException, Exception {
         
     Stage primaryStage = (Stage) selectBtn.getScene().getWindow();
-    primaryStage.setTitle("Select a File");
-
-    FileChooser fileChooser = new FileChooser();
-    fileChooser.setTitle("Open Resource File");
-    selectedFile = fileChooser.showOpenDialog(primaryStage);
-    User selectedUser = (User) userSelectionTable.getSelectionModel().getSelectedItem();
-
-    if (selectedFile != null) {
+        FileChooser fileChooser = new FileChooser();
+        selectedFile = fileChooser.showOpenDialog(primaryStage);
+        
+         if (selectedFile != null) {
       
         Scanner scanner = new Scanner(selectedFile);
         StringBuilder fileContent = new StringBuilder();
-        while (scanner.hasNextLine()) {
-            fileContent.append(scanner.nextLine()).append("\n");
+            while (scanner.hasNextLine()) {
+                fileContent.append(scanner.nextLine()).append("\n");
+            }
+                scanner.close();
+
+            String filename = selectedFile.getName();
+            long fileLength = selectedFile.length();
+            String filePath = selectedFile.getAbsolutePath();
+            int crc32 = calculateCRC32(fileContent.toString());
+            
+            DB db = new DB();
+            String fileId = db.addFileToUser(filename, fileLength, crc32, filePath,  this.userId);
+            
+            
+           // List<String> chunks = FileChunking.chunkFile(selectedFile, "chunks/", 4, fileId);
+            
+            //Request request = new Request(userId, fileId, Request.OperationType.UPLOAD, fileLength, 1, chunks);
+            //mqttClient.sendRequest(request);
+            
+            fileTableView.getItems().add(new FileModel(fileId, filename, fileLength, crc32, filePath));
+            showAlert("Success", "File added successfully!", Alert.AlertType.INFORMATION);
+            
+        } else {
+            showAlert("Warning", "No file selected.", Alert.AlertType.WARNING);
         }
-        scanner.close();
-
-        String filename = selectedFile.getName();
-        long fileLength = selectedFile.length();
-        String filePath = selectedFile.getAbsolutePath();
-        int crc32 = calculateCRC32(fileContent.toString());
-        
-        DB db = new DB();
-
-        String fileId = db.addFileToUser(filename, fileLength, crc32, filePath, this.userId);
-        
-        String outputDir = "chunks/";  
-        int numberOfChunks = 4; 
-        FileChunking.chunkFile(selectedFile, outputDir, numberOfChunks, fileId);
-
-    
-        FileModel newFile = new FileModel(fileId, filename, fileLength, crc32, filePath);
-        fileTableView.getItems().add(newFile);
-        
-        showAlert("Success", "File added successfully!", Alert.AlertType.INFORMATION);
-    } else {
-        showAlert("Warning", "No file selected.", Alert.AlertType.WARNING);
     }
    
         
-    }
+
     private int calculateCRC32(String content) {
     try {
         CRC32 crc32 = new CRC32();
@@ -207,7 +221,7 @@ public class FileselectionController {
                 FileModel newFileModel = new FileModel(fileId, fileName, fileLength, crc32, filePath);
                 fileTableView.getItems().add(newFileModel);
 
-                showAlert("Success", "File created successfully!", Alert.AlertType.INFORMATION);
+                showAlert("Success", "File created s34uccessfully!", Alert.AlertType.INFORMATION);
             } else {
                 showAlert("Warning", "File already exists!", Alert.AlertType.WARNING);
             }
@@ -310,7 +324,7 @@ public class FileselectionController {
                 Path filePath = Paths.get(selectedFile.getFilePath());
                 Files.deleteIfExists(filePath);
 
-                db.deleteFileForUser(selectedFile.getFileId(), selectedUser.getId());
+                db.deleteFileForUser(selectedFile.getFileId(), this.userId);
 
                 fileTableView.getItems().remove(selectedFile);
 
@@ -362,11 +376,14 @@ public class FileselectionController {
     
     public void initialiseUsers(String[] credentials) throws ClassNotFoundException, SQLException{
      
+        this.userId = Integer.parseInt(credentials[1]);
+        
         welcomeText.setText(credentials[0]);
         System.out.println("Name" + credentials[0]);
         
         DB myObj = new DB();
         ObservableList<User> data;
+        
 
         try {
            

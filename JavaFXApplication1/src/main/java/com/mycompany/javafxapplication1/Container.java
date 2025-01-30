@@ -16,11 +16,19 @@ import java.io.InputStreamReader;
 public class Container {
     
     private final String id;
+    private final String host;
+    private final int port;
+    private final String username;
+    private final String password;
     private final SSHClient sshClient;
     private int currentLoad;
 
     public Container(String id, String host, int port, String username, String password) {
         this.id = id;
+        this.host = host;
+        this.port = port;
+        this.username = username;
+        this.password = password;
         this.sshClient = new SSHClient(host, port, username, password);
         this.currentLoad = 0;
 
@@ -36,10 +44,39 @@ public class Container {
         System.out.println("Processing request " + request.getId() + " on container " + id);
         try {
             sshClient.executeCommand("echo Processing request " + request.getId());
+
+            for (String chunk : request.getChunks()) {
+                sendFileToContainer(chunk);
+            }
+
         } catch (Exception e) {
             e.printStackTrace();
         } finally {
             currentLoad--;
+        }
+    }
+    
+    private void sendFileToContainer(String chunk) {
+        String localFilePath = "chunks/" + chunk;
+        String remoteFilePath = "/files/" + chunk; // Папка в контейнері
+
+        try {
+            JSch jsch = new JSch();
+            Session session = jsch.getSession(username, host, port);
+            session.setPassword(password);
+            session.setConfig("StrictHostKeyChecking", "no");
+            session.connect();
+
+            ChannelSftp sftp = (ChannelSftp) session.openChannel("sftp");
+            sftp.connect();
+            sftp.put(localFilePath, remoteFilePath);
+
+            System.out.println("Uploaded " + chunk + " to " + id);
+            sftp.disconnect();
+            session.disconnect();
+            
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 
@@ -50,7 +87,6 @@ public class Container {
     public void disconnect() {
         sshClient.disconnect();
     }
-    
 }
     
 
