@@ -15,7 +15,7 @@ import java.io.InputStreamReader;
  */
 public class Container {
     
-    private final String id;
+   private final String id;
     private final String host;
     private final int port;
     private final String username;
@@ -38,47 +38,42 @@ public class Container {
             throw new RuntimeException("Failed to connect to container " + id, e);
         }
     }
-
-    public synchronized void processRequest(Request request) {
-        currentLoad++;
-        System.out.println("Processing request " + request.getId() + " on container " + id);
+    
+    public void deleteChunk(String chunk) {
+        
+        String remoteFilePath = "/files/" + chunk;
         try {
-            sshClient.executeCommand("echo Processing request " + request.getId());
-
-            for (String chunk : request.getChunks()) {
-                sendFileToContainer(chunk);
-            }
-
+            sshClient.executeCommand("rm -f " + remoteFilePath);
+            System.out.println("Deleted chunk " + chunk + " from " + id);
         } catch (Exception e) {
             e.printStackTrace();
-        } finally {
-            currentLoad--;
-        }
+    }
+}
+    
+    public synchronized void sendFileToContainer(String chunk) throws JSchException, IOException, SftpException {
+        currentLoad++;
+        System.out.println("Uploading " + chunk + " to " + id);
+        sshClient.uploadFile("chunks/" + chunk, "/files/" + chunk);
+        currentLoad--;
     }
     
-    private void sendFileToContainer(String chunk) {
-        String localFilePath = "chunks/" + chunk;
-        String remoteFilePath = "/files/" + chunk; // Папка в контейнері
+    public boolean isHealthy() {
+    try {
+        JSch jsch = new JSch();
+        Session session = jsch.getSession(username, host, port);
+        session.setPassword(password);
+        session.setConfig("StrictHostKeyChecking", "no");
+        session.setTimeout(5000); // 5 секунд на перевірку
+        session.connect();
 
-        try {
-            JSch jsch = new JSch();
-            Session session = jsch.getSession(username, host, port);
-            session.setPassword(password);
-            session.setConfig("StrictHostKeyChecking", "no");
-            session.connect();
-
-            ChannelSftp sftp = (ChannelSftp) session.openChannel("sftp");
-            sftp.connect();
-            sftp.put(localFilePath, remoteFilePath);
-
-            System.out.println("Uploaded " + chunk + " to " + id);
-            sftp.disconnect();
-            session.disconnect();
-            
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        session.disconnect();
+        System.out.println("✅ " + id + " is healthy.");
+        return true;
+    } catch (Exception e) {
+        System.err.println("❌ " + id + " is not responding.");
+        return false;
     }
+}
 
     public synchronized int getCurrentLoad() {
         return currentLoad;

@@ -10,7 +10,7 @@ import com.google.gson.Gson;
 
 public class Request {
     
-    public enum OperationType { UPLOAD, DOWNLOAD, DELETE }
+    public enum OperationType { UPLOAD, DOWNLOAD, DELETE, UPDATE }
     public enum Status { PENDING, IN_PROGRESS, COMPLETED, FAILED }
 
     private final String requestId;
@@ -35,19 +35,23 @@ public class Request {
         this.status = Status.PENDING;
     }
 
-   public static Request fromJson(String json) {
+   public String getId() {
+        return fileId;
+    }
+
+    public OperationType getOperationType() {
+        return operationType;
+    }
+
+    public List<String> getChunks() {
+        return chunks;
+    }
+
+    public static Request fromJson(String json) {
         return new Gson().fromJson(json, Request.class);
     }
 
     public String toJson() {
         return new Gson().toJson(this);
-    }
-    
-    public List<String> getChunks() {
-        return chunks;
-    }
-
-    public String getId() {
-        return fileId;
-    }
+}
 }

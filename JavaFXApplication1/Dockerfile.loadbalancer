@@ -1,0 +1,4 @@
+FROM openjdk:11
+WORKDIR /app
+COPY target/load-balancer.jar /app/load-balancer.jar
+CMD ["java", "-jar", "/app/load-balancer.jar"]

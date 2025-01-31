@@ -5,13 +5,17 @@
 package com.mycompany.javafxapplication1;
 import org.eclipse.paho.client.mqttv3.*;
 import com.google.gson.Gson;
+import com.jcraft.jsch.JSchException;
+import com.jcraft.jsch.SftpException;
+import java.io.IOException;
 /**
  *
  * @author ntu-user
  */
 public class MQTTClient {
     
-    private static final String BROKER_URL = "tcp://mqtt-broker:1883";
+     
+    private static final String BROKER_URL = "tcp://mqtt-broker:1883";  // Адреса брокера MQTT
     private static final String CLIENT_ID = MqttClient.generateClientId();
     private static final String TOPIC = "load-balancer/file-operation";
 
@@ -24,7 +28,6 @@ public class MQTTClient {
         connect();
     }
 
-    // Підключення до MQTT брокера
     private void connect() throws MqttException {
         MqttConnectOptions options = new MqttConnectOptions();
         options.setCleanSession(true);
@@ -32,28 +35,23 @@ public class MQTTClient {
         System.out.println("Connected to MQTT broker at " + BROKER_URL);
     }
 
-    // Відправка запиту на Load Balancer
+    // Відправка запиту в Load Balancer
     public void sendRequest(Request request) throws MqttException {
         String jsonRequest = gson.toJson(request);
         MqttMessage message = new MqttMessage(jsonRequest.getBytes());
+        message.setQos(1);  // Гарантія доставки повідомлення
         client.publish(TOPIC, message);
         System.out.println("Sent MQTT request: " + jsonRequest);
     }
 
-    // Підписка на Load Balancer для отримання відповідей
-    public void subscribe() {
-        try {
-            client.subscribe(TOPIC, (topic, message) -> {
-                String payload = new String(message.getPayload());
-                System.out.println("Received MQTT response: " + payload);
-                handleResponse(payload);
-            });
-        } catch (MqttException e) {
-            e.printStackTrace();
-        }
+    public void subscribe() throws MqttException {
+        client.subscribe(TOPIC, (topic, message) -> {
+            String payload = new String(message.getPayload());
+            System.out.println("Received MQTT response: " + payload);
+            handleResponse(payload);
+        });
     }
 
-    // Обробка отриманого JSON-відповіді від Load Balancer
     private void handleResponse(String payload) {
         try {
             Response response = gson.fromJson(payload, Response.class);
@@ -63,15 +61,10 @@ public class MQTTClient {
         }
     }
 
-    // Закриття підключення
-    public void disconnect() {
-        try {
-            if (client.isConnected()) {
-                client.disconnect();
-                System.out.println("Disconnected from MQTT broker.");
-            }
-        } catch (MqttException e) {
-            e.printStackTrace();
+    public void disconnect() throws MqttException {
+        if (client.isConnected()) {
+            client.disconnect();
+            System.out.println("Disconnected from MQTT broker.");
         }
     }
 }

@@ -102,6 +102,7 @@ public class FileselectionController {
     private DB db;
 
     public FileselectionController() throws MqttException {
+        
     this.mqttClient = new MQTTClient();
 
     List<Container> containers = new ArrayList<>();
@@ -161,10 +162,10 @@ public class FileselectionController {
             String fileId = db.addFileToUser(filename, fileLength, crc32, filePath,  this.userId);
             
             
-           // List<String> chunks = FileChunking.chunkFile(selectedFile, "chunks/", 4, fileId);
+           List<String> chunks = FileChunking.chunkFile(selectedFile, "chunks/", 4, fileId);
             
-            //Request request = new Request(userId, fileId, Request.OperationType.UPLOAD, fileLength, 1, chunks);
-            //mqttClient.sendRequest(request);
+            Request request = new Request(userId, fileId, Request.OperationType.UPLOAD, fileLength, 1, chunks);
+            mqttClient.sendRequest(request);
             
             fileTableView.getItems().add(new FileModel(fileId, filename, fileLength, crc32, filePath));
             showAlert("Success", "File added successfully!", Alert.AlertType.INFORMATION);
