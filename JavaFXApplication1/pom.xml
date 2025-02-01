@@ -82,6 +82,31 @@
                     </execution>
                 </executions>
             </plugin>
+            
+            <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-jar-plugin</artifactId>
+            <version>3.3.0</version>
+            <executions>
+                <execution>
+                    <id>jar-load-balancer</id>
+                    <phase>package</phase>
+                    <goals>
+                        <goal>jar</goal>
+                    </goals>
+                    <configuration>
+                        <classifier>load-balancer</classifier>
+                        <archive>
+                            <manifest>
+                                <addClasspath>true</addClasspath>
+                                <mainClass>com.mycompany.javafxapplication1.LoadBalancer</mainClass>
+                            </manifest>
+                        </archive>
+                    </configuration>
+                </execution>
+            </executions>
+        </plugin>
+        
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
