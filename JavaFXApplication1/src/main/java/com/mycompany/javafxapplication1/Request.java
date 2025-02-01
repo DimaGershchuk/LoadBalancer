@@ -42,6 +42,10 @@ public class Request {
     public OperationType getOperationType() {
         return operationType;
     }
+    
+    public String getFileId(){
+        return fileId;
+    }
 
     public List<String> getChunks() {
         return chunks;

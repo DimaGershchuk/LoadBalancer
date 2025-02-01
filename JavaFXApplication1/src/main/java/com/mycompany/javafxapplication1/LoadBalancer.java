@@ -23,8 +23,10 @@ public class LoadBalancer{
     
 
     public enum TrafficLevel { LOW, MEDIUM, HIGH }
+    
     private TrafficLevel trafficLevel = TrafficLevel.LOW;
-    private double trafficMultiplier = 1.0;  // Default is 1x
+    
+    private double trafficMultiplier = 1.0;  
 
     public LoadBalancer(List<Container> containers, int maxConcurrentRequests) {
         this.containers = containers;
@@ -70,7 +72,7 @@ public class LoadBalancer{
                 addRequest(request);
                 break;
             case DELETE:
-                deleteFile(request);
+                deleteChunks(request);
                 break;
             case UPDATE:
                 updateFile(request);
@@ -80,22 +82,25 @@ public class LoadBalancer{
         }
     }
     
-    private void deleteFile(Request request) {
-        System.out.println("Deleting file: " + request.getId());
-
+    private Container selectContainerForChunk(String chunk) {
+        int containerIndex = Math.abs(chunk.hashCode()) % containers.size();
+        return containers.get(containerIndex);
+    }
+    
+    private void deleteChunks(Request request) {
         for (String chunk : request.getChunks()) {
-            Container selectedContainer = roundRobin(); 
-            selectedContainer.deleteChunk(chunk);
-        
+            Container container = selectContainerForChunk(chunk);
+            if (container != null) {
+                container.deleteChunk(chunk);
+            }
         }
-
-        System.out.println("File " + request.getId() + " successfully deleted.");
+        System.out.println("File deletion completed: " + request.getFileId());
     }
     
     private void updateFile(Request request) throws JSchException, IOException, SftpException {
         System.out.println("Updating file: " + request.getId());
 
-        deleteFile(request);
+        deleteChunks(request);
 
         distributeChunks(request);
 
@@ -165,12 +170,19 @@ public class LoadBalancer{
     }
 
     private Container roundRobin() {
-        Container selectedContainer = containers.get(roundRobinIndex);
-        roundRobinIndex = (roundRobinIndex + 1) % containers.size();
+        List<Container> healthyContainers = getHealthyContainers();
+        if (healthyContainers.isEmpty()) {
+            System.out.println("❌ No healthy containers available.");
+            return null;
+        }
+        Container selectedContainer = healthyContainers.get(roundRobinIndex % healthyContainers.size());
+        roundRobinIndex = (roundRobinIndex + 1) % healthyContainers.size();
         return selectedContainer;
     }
 
+    
     private void simulateDelay() {
+        
         int baseDelay = 30 + random.nextInt(61);
         int adjustedDelay = (int) (baseDelay * trafficMultiplier);
         System.out.println("Simulated delay: " + adjustedDelay + " seconds (Traffic Level: " + trafficLevel + ")");
@@ -187,6 +199,54 @@ public class LoadBalancer{
         System.out.println("Waiting Queue: " + waitingQueue.size());
         System.out.println("Processing Queue: " + processingQueue.size());
         System.out.println("Ready Queue: " + readyQueue.size());
+    }
+    
+    public static void main(String[] args) {
+        try {
+            List<Container> containers = new ArrayList<>();
+            containers.add(new Container("container1", "soft40051-files-container1", 22, "ntu-user", "ntu-user"));
+            containers.add(new Container("container2", "soft40051-files-container2", 22, "ntu-user", "ntu-user"));
+            containers.add(new Container("container3", "soft40051-files-container3", 22, "ntu-user", "ntu-user"));
+            containers.add(new Container("container4", "soft40051-files-container4", 22, "ntu-user", "ntu-user"));
+            
+            
+            LoadBalancer loadBalancer = new LoadBalancer(containers, 2);
+            System.out.println("✅Load Balancer connect to MQTT borker!");
+            Scanner scanner = new Scanner(System.in);
+    
+            while (true) {
+                System.out.println("\n=== Available Containers ===");
+                for (int i = 0; i < containers.size(); i++) {
+                    System.out.println((i + 1) + ". " + containers.get(i).getId());
+                }
+                System.out.println("0. Exit");
+
+                System.out.print("\nSelect a container to connect: ");
+                int choice = scanner.nextInt();
+                scanner.nextLine(); // Споживаємо залишок рядка після числа
+
+                if (choice == 0) {
+                    System.out.println("Exiting...");
+                    break;
+                } else if (choice > 0 && choice <= containers.size()) {
+                    Container selectedContainer = containers.get(choice - 1);
+                    selectedContainer.openRemoteTerminal();
+                } else {
+                    System.out.println("❌ Invalid choice. Please try again.");
+                }
+            }
+
+            while (true) {
+                Thread.sleep(10000); 
+            }
+            
+       
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        
+        
     }
     
 }

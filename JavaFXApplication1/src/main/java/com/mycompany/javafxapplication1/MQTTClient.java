@@ -15,7 +15,7 @@ import java.io.IOException;
 public class MQTTClient {
     
      
-    private static final String BROKER_URL = "tcp://mqtt-broker:1883";  // Адреса брокера MQTT
+    private static final String BROKER_URL = "tcp://mqtt-broker:1883"; 
     private static final String CLIENT_ID = MqttClient.generateClientId();
     private static final String TOPIC = "load-balancer/file-operation";
 

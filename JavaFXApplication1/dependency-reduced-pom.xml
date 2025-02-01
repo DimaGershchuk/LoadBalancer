@@ -11,17 +11,31 @@
         <version>3.4.1</version>
         <executions>
           <execution>
+            <id>shade-main-app</id>
             <phase>package</phase>
             <goals>
               <goal>shade</goal>
             </goals>
             <configuration>
+              <finalName>JavaFXApplication1</finalName>
               <transformers>
                 <transformer>
-                  <manifestEntries>
-                    <Main-Class>com.mycompany.javafxapplication1.App</Main-Class>
-                    <Build-Number>123</Build-Number>
-                  </manifestEntries>
+                  <mainClass>com.mycompany.javafxapplication1.App</mainClass>
+                </transformer>
+              </transformers>
+            </configuration>
+          </execution>
+          <execution>
+            <id>shade-load-balancer</id>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+            <configuration>
+              <finalName>load-balancer</finalName>
+              <transformers>
+                <transformer>
+                  <mainClass>com.mycompany.javafxapplication1.LoadBalancer</mainClass>
                 </transformer>
               </transformers>
             </configuration>

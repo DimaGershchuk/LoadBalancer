@@ -592,6 +592,30 @@ public class DB {
                 }
             return false;
         }
-}
+    
+        public List<String> getChunksForFile(String fileId) throws SQLException, ClassNotFoundException {
+            
+            List<String> chunks = new ArrayList<>();
+            String query = "SELECT chunk_id FROM chunks WHERE file_id = ?";
+
+            if (connection == null) {
+                connection = initConnection();
+            }
+
+            try (PreparedStatement pstmt = connection.prepareStatement(query)) {
+                pstmt.setString(1, fileId);
+                try (ResultSet rs = pstmt.executeQuery()) {
+                    while (rs.next()) {
+                    String chunkId = rs.getString("chunk_id");
+                    System.out.println("Retrieved chunk: " + chunkId);  
+                    chunks.add(chunkId);
+                }
+            }
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                }
+            return chunks;
+        }
+    }
 
 

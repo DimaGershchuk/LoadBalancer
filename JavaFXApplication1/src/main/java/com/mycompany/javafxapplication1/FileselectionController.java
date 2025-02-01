@@ -101,17 +101,9 @@ public class FileselectionController {
     private int userId;
     private DB db;
 
-    public FileselectionController() throws MqttException {
+    public FileselectionController() throws MqttException {  
         
     this.mqttClient = new MQTTClient();
-
-    List<Container> containers = new ArrayList<>();
-    containers.add(new Container("container1", "soft40051-files-container1", 22, "ntu-user", "ntu-user"));
-    containers.add(new Container("container2", "soft40051-files-container2", 22, "ntu-user", "ntu-user"));
-    containers.add(new Container("container3", "soft40051-files-container3", 22, "ntu-user", "ntu-user"));
-    containers.add(new Container("container4", "soft40051-files-container4", 22, "ntu-user", "ntu-user"));
-
-    this.loadBalancer = new LoadBalancer(containers, 2);
     
     }
             
@@ -162,7 +154,7 @@ public class FileselectionController {
             String fileId = db.addFileToUser(filename, fileLength, crc32, filePath,  this.userId);
             
             
-           List<String> chunks = FileChunking.chunkFile(selectedFile, "chunks/", 4, fileId);
+            List<String> chunks = FileChunking.chunkFile(selectedFile, "chunks/", 4, fileId);
             
             Request request = new Request(userId, fileId, Request.OperationType.UPLOAD, fileLength, 1, chunks);
             mqttClient.sendRequest(request);
@@ -313,7 +305,6 @@ public class FileselectionController {
                 showAlert("Access Denied", "You don't have permission to modify this file.", Alert.AlertType.ERROR);
                 return;
             }
-            
         Alert confirmationAlert = new Alert(Alert.AlertType.CONFIRMATION);
         confirmationAlert.setTitle("Delete File");
         confirmationAlert.setHeaderText("Are you sure you want to delete this file?");
@@ -325,6 +316,11 @@ public class FileselectionController {
                 Path filePath = Paths.get(selectedFile.getFilePath());
                 Files.deleteIfExists(filePath);
 
+                List<String> chunks = db.getChunksForFile(selectedFile.getFileId());
+                
+                Request deleteRequest = new Request(userId, selectedFile.getFileId(), Request.OperationType.DELETE, 0, 1, chunks);
+                mqttClient.sendRequest(deleteRequest);
+                
                 db.deleteFileForUser(selectedFile.getFileId(), this.userId);
 
                 fileTableView.getItems().remove(selectedFile);

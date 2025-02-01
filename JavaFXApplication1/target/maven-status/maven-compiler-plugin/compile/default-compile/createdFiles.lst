@@ -3,6 +3,7 @@ com/mycompany/javafxapplication1/Request$OperationType.class
 com/mycompany/javafxapplication1/FileChunking.class
 com/mycompany/javafxapplication1/SessionManager.class
 com/mycompany/javafxapplication1/SSHClient.class
+com/mycompany/javafxapplication1/RemoteTerminal.class
 com/mycompany/javafxapplication1/Request$Status.class
 com/mycompany/javafxapplication1/DB.class
 com/mycompany/javafxapplication1/FileselectionController.class

@@ -40,40 +40,57 @@ public class Container {
     }
     
     public void deleteChunk(String chunk) {
-        
         String remoteFilePath = "/files/" + chunk;
         try {
             sshClient.executeCommand("rm -f " + remoteFilePath);
             System.out.println("Deleted chunk " + chunk + " from " + id);
         } catch (Exception e) {
+            System.err.println("Failed to delete chunk " + chunk + " from " + id);
             e.printStackTrace();
+        }
     }
-}
-    
-    public synchronized void sendFileToContainer(String chunk) throws JSchException, IOException, SftpException {
+
+    public synchronized void sendFileToContainer(String chunk) {
         currentLoad++;
-        System.out.println("Uploading " + chunk + " to " + id);
-        sshClient.uploadFile("chunks/" + chunk, "/files/" + chunk);
-        currentLoad--;
+        try {
+            System.out.println("Uploading " + chunk + " to " + id);
+            sshClient.uploadFile("chunks/" + chunk, "/files/" + chunk);
+        } catch (Exception e) {
+            System.err.println("Failed to upload chunk " + chunk + " to " + id);
+            e.printStackTrace();
+        } finally {
+            currentLoad--;
+        }
     }
     
     public boolean isHealthy() {
-    try {
-        JSch jsch = new JSch();
-        Session session = jsch.getSession(username, host, port);
-        session.setPassword(password);
-        session.setConfig("StrictHostKeyChecking", "no");
-        session.setTimeout(5000); // 5 секунд на перевірку
-        session.connect();
+        
+        try {
+            JSch jsch = new JSch();
+            Session session = jsch.getSession(username, host, port);
+            session.setPassword(password);
+            session.setConfig("StrictHostKeyChecking", "no");
+            session.setTimeout(5000);
+            session.connect();
 
-        session.disconnect();
-        System.out.println("✅ " + id + " is healthy.");
-        return true;
-    } catch (Exception e) {
-        System.err.println("❌ " + id + " is not responding.");
-        return false;
+            session.disconnect();
+            System.out.println("✅ " + id + " is healthy.");
+            return true;
+            
+        } catch (Exception e) {
+            System.err.println("❌ " + id + " is not responding.");
+            return false;
+        }
     }
-}
+    
+    public void openRemoteTerminal() {
+        RemoteTerminal terminal = new RemoteTerminal(host, port, username, password);
+        terminal.startSession();
+    }
+    
+    public String getId(){
+        return id;
+    }
 
     public synchronized int getCurrentLoad() {
         return currentLoad;
