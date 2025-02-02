@@ -4,8 +4,8 @@ import com.google.gson.Gson;
 import com.jcraft.jsch.JSchException;
 import com.jcraft.jsch.SftpException;
 import java.util.*;
-import java.util.concurrent.*;
 import java.io.*;
+import java.nio.file.Files;
 import org.eclipse.paho.client.mqttv3.*;
 
 
@@ -69,13 +69,13 @@ public class LoadBalancer{
 
         switch (request.getOperationType()) {
             case UPLOAD:
-                addRequest(request);
+                uploadFile(request);
                 break;
             case DELETE:
                 deleteChunks(request);
                 break;
-            case UPDATE:
-                updateFile(request);
+            case DOWNLOAD:
+                downloadChunks(request);
                 break;
             default:
                 System.out.println("Unknown operation type: " + request.getOperationType());
@@ -87,17 +87,98 @@ public class LoadBalancer{
         return containers.get(containerIndex);
     }
     
-    private void deleteChunks(Request request) {
-        for (String chunk : request.getChunks()) {
-            Container container = selectContainerForChunk(chunk);
-            if (container != null) {
-                container.deleteChunk(chunk);
-            }
+    private void uploadFile(Request request) {
+        if (FileLockManager.isFileLocked(request.getFileId())) {
+            System.out.println("File is currently being processed. Waiting to upload: " + request.getFileId());
+            return;
         }
-        System.out.println("File deletion completed: " + request.getFileId());
+
+        FileLockManager.lockFile(request.getFileId()); 
+
+        try {
+            System.out.println("Uploading file: " + request.getFileId());
+            distributeChunks(request);  
+            System.out.println("File upload completed: " + request.getFileId());
+        } catch (Exception e) {
+            System.err.println("Error during upload of file: " + request.getFileId());
+            e.printStackTrace();
+        } finally {
+            FileLockManager.unlockFile(request.getFileId());  
+        }
     }
     
-    private void updateFile(Request request) throws JSchException, IOException, SftpException {
+    private void deleteChunks(Request request) {
+        
+        if (FileLockManager.isFileLocked(request.getFileId())) {
+            System.out.println("File is currently in use. Waiting to delete: " + request.getFileId());
+            return;
+        }
+
+        FileLockManager.lockFile(request.getFileId());
+        try {
+            for (String chunk : request.getChunks()) {
+                Container container = selectContainerForChunk(chunk);
+                if (container != null) {
+                    container.deleteChunk(chunk);
+                }
+            }
+        System.out.println("File deletion completed: " + request.getFileId());
+        
+        } finally {
+            FileLockManager.unlockFile(request.getFileId()); 
+        }
+    }
+    
+    private void downloadChunks(Request request) throws IOException{
+        
+        if (FileLockManager.isFileLocked(request.getFileId())) {
+            System.out.println("File is currently in use. Waiting to delete: " + request.getFileId());
+            return;
+        }
+
+        FileLockManager.lockFile(request.getFileId());
+        
+        try {
+            List<String> chunks = request.getChunks();
+
+            for(String chunk : chunks){
+                Container container = selectContainerForChunk(chunk);
+                if (container != null) {
+                container.downloadChunk(chunk, "downloads/" + chunk); 
+                System.out.println("Downloaded chunk " + chunk + " from " + container.getId());
+                }
+            }
+                combineChunks(chunks, request.getFileId());
+                
+        } finally{
+            FileLockManager.unlockFile(request.getFileId()); 
+        }
+        
+    }
+        
+
+    public void combineChunks(List<String> chunks, String fileId) throws FileNotFoundException, IOException{
+        
+        try(FileOutputStream fos = new FileOutputStream("downloads/" + fileId)){
+            for(String chunk : chunks){
+                File chunkFile = new File("dowload/" + fileId);
+                Files.copy(chunkFile.toPath(), fos);
+                chunkFile.delete();
+            }
+        } catch (IOException e) {
+            System.err.println("Failed to combine chunks for file " + fileId);
+            e.printStackTrace();
+    }}
+    
+    /*private void updateFile(Request request) throws JSchException, IOException, SftpException {
+    
+         if (FileLockManager.isFileLocked(request.getFileId())) {
+            System.out.println("File is currently in use. Waiting to delete: " + request.getFileId());
+            return;
+        }
+
+        FileLockManager.lockFile(request.getFileId());
+    
         System.out.println("Updating file: " + request.getId());
 
         deleteChunks(request);
@@ -105,7 +186,7 @@ public class LoadBalancer{
         distributeChunks(request);
 
         System.out.println("File " + request.getId() + " successfully updated.");
-    }
+    }*/
 
     private void handleTrafficLevelMessage(String topic, MqttMessage message) {
         
@@ -139,11 +220,16 @@ public class LoadBalancer{
     }
 
     private void processRequests() throws JSchException, IOException, SftpException {
-        synchronized (waitingQueue) {
+         synchronized (waitingQueue) {
             while (!waitingQueue.isEmpty() && processingQueue.size() < maxConcurrentRequests) {
                 Request request = waitingQueue.poll();
                 processingQueue.add(request);
-                distributeChunks(request);
+
+                if (request.getOperationType() == Request.OperationType.UPLOAD) {
+                    uploadFile(request); 
+                } else {
+                    distributeChunks(request); 
+                }
             }
         }
     }
@@ -212,33 +298,7 @@ public class LoadBalancer{
             
             LoadBalancer loadBalancer = new LoadBalancer(containers, 2);
             System.out.println("✅Load Balancer connect to MQTT borker!");
-            Scanner scanner = new Scanner(System.in);
-    
-            while (true) {
-                System.out.println("\n=== Available Containers ===");
-                for (int i = 0; i < containers.size(); i++) {
-                    System.out.println((i + 1) + ". " + containers.get(i).getId());
-                }
-                System.out.println("0. Exit");
-
-                System.out.print("\nSelect a container to connect: ");
-                int choice = scanner.nextInt();
-                scanner.nextLine(); // Споживаємо залишок рядка після числа
-
-                if (choice == 0) {
-                    System.out.println("Exiting...");
-                    break;
-                } else if (choice > 0 && choice <= containers.size()) {
-                    Container selectedContainer = containers.get(choice - 1);
-                    selectedContainer.openRemoteTerminal();
-                } else {
-                    System.out.println("❌ Invalid choice. Please try again.");
-                }
-            }
-
-            while (true) {
-                Thread.sleep(10000); 
-            }
+            
             
        
 

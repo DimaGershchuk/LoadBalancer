@@ -14,7 +14,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.sql.SQLException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Scanner;
@@ -28,7 +27,6 @@ import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
-import javafx.scene.control.Button;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.TableColumn;
@@ -92,6 +90,22 @@ public class FileselectionController {
     @FXML
     private Button givePermRead;
     
+    @FXML
+    private Button selectContainer1;
+    
+    @FXML
+    private Button selectContainer2;
+    
+    
+    @FXML
+    private Button selectContainer3;
+    
+    @FXML
+    private Button selectContainer4;
+    
+    @FXML
+    private Button downloadFile;
+    
     
     private File selectedFile;
    
@@ -100,16 +114,28 @@ public class FileselectionController {
     
     private int userId;
     private DB db;
+    
+    private Container container1;
+    private Container container2;
+    private Container container3;
+    private Container container4;
+    
+    @FXML
+    public void initialize() {
+        container1 = new Container("container1", "soft40051-files-container1", 22, "ntu-user", "ntu-user");
+        container2 = new Container("container2", "soft40051-files-container2", 22, "ntu-user", "ntu-user");
+        container3 = new Container("container3", "soft40051-files-container3", 22, "ntu-user", "ntu-user");
+        container4 = new Container("container4", "soft40051-files-container4", 22, "ntu-user", "ntu-user");
+    }
+
 
     public FileselectionController() throws MqttException {  
         
-    this.mqttClient = new MQTTClient();
+        this.mqttClient = new MQTTClient();
     
     }
             
-    
-    
-    
+   
     @FXML
     private void switchToLogin(ActionEvent event) throws IOException{
         Stage secondaryStage = new Stage();
@@ -170,61 +196,60 @@ public class FileselectionController {
         
 
     private int calculateCRC32(String content) {
-    try {
-        CRC32 crc32 = new CRC32();
-        crc32.update(content.getBytes(StandardCharsets.UTF_8));
-        return (int) crc32.getValue();
-    } catch (Exception e) {
-        e.printStackTrace();
-        return 0;
+        try {
+            CRC32 crc32 = new CRC32();
+            crc32.update(content.getBytes(StandardCharsets.UTF_8));
+            return (int) crc32.getValue();
+        } catch (Exception e) {
+            e.printStackTrace();
+            return 0;
     }}
     
     @FXML
     private void createFileHandler(ActionEvent event) throws FileNotFoundException, Exception {
         
-    TextInputDialog dialog = new TextInputDialog("NewFile.txt");
-    dialog.setTitle("Create New File");
-    dialog.setHeaderText("Enter the name for the new file:");
-    dialog.setContentText("File name:");
-    User selectedUser = (User) userSelectionTable.getSelectionModel().getSelectedItem();
+        TextInputDialog dialog = new TextInputDialog("NewFile.txt");
+        dialog.setTitle("Create New File");
+        dialog.setHeaderText("Enter the name for the new file:");
+        dialog.setContentText("File name:");
+        User selectedUser = (User) userSelectionTable.getSelectionModel().getSelectedItem();
 
-    Optional<String> result = dialog.showAndWait();
-    if (result.isPresent() && !result.get().isBlank()) {
-        String fileName = result.get().trim();
-        File newFile = new File(System.getProperty("user.home") + File.separator + fileName);
+        Optional<String> result = dialog.showAndWait();
+        if (result.isPresent() && !result.get().isBlank()) {
+            String fileName = result.get().trim();
+            File newFile = new File(System.getProperty("user.home") + File.separator + fileName);
 
-        try {
-            // Створення нового файлу
-            if (newFile.createNewFile()) {
-                FileWriter writer = new FileWriter(newFile);
-                writer.write("This is the initial content of the file.\n"); 
-                writer.close();
+            try {
+                if (newFile.createNewFile()) {
+                    FileWriter writer = new FileWriter(newFile);
+                    writer.write("This is the initial content of the file.\n"); 
+                    writer.close();
 
-                long fileLength = newFile.length();
-                String content = Files.readString(newFile.toPath());
-                int crc32 = calculateCRC32(content);
+                    long fileLength = newFile.length();
+                    String content = Files.readString(newFile.toPath());
+                    int crc32 = calculateCRC32(content);
 
-                String filePath = newFile.getAbsolutePath();
-                String fileId = db.addFileToUser(fileName, fileLength, crc32, filePath, this.userId);
-                
-                String outputDir = "chunks/";  
-                int numberOfChunks = 4;  
-                FileChunking.chunkFile(selectedFile, outputDir, numberOfChunks, fileId);
+                    String filePath = newFile.getAbsolutePath();
+                    String fileId = db.addFileToUser(fileName, fileLength, crc32, filePath, this.userId);
 
-                FileModel newFileModel = new FileModel(fileId, fileName, fileLength, crc32, filePath);
-                fileTableView.getItems().add(newFileModel);
+                    String outputDir = "chunks/";  
+                    int numberOfChunks = 4;  
+                    FileChunking.chunkFile(selectedFile, outputDir, numberOfChunks, fileId);
 
-                showAlert("Success", "File created s34uccessfully!", Alert.AlertType.INFORMATION);
-            } else {
-                showAlert("Warning", "File already exists!", Alert.AlertType.WARNING);
+                    FileModel newFileModel = new FileModel(fileId, fileName, fileLength, crc32, filePath);
+                    fileTableView.getItems().add(newFileModel);
+
+                    showAlert("Success", "File created s34uccessfully!", Alert.AlertType.INFORMATION);
+                } else {
+                    showAlert("Warning", "File already exists!", Alert.AlertType.WARNING);
+                }
+            } catch (IOException | SQLException | ClassNotFoundException e) {
+                e.printStackTrace();
+                showAlert("Error", "Failed to create the file.", Alert.AlertType.ERROR);
             }
-        } catch (IOException | SQLException | ClassNotFoundException e) {
-            e.printStackTrace();
-            showAlert("Error", "Failed to create the file.", Alert.AlertType.ERROR);
+        } else {
+            showAlert("Warning", "File name cannot be empty.", Alert.AlertType.WARNING);
         }
-    } else {
-        showAlert("Warning", "File name cannot be empty.", Alert.AlertType.WARNING);
-    }
     }
     
     @FXML
@@ -244,7 +269,7 @@ public class FileselectionController {
     } else {
         fileTextArea.clear();
         showAlert("Warning", "Please select a file from the table.", Alert.AlertType.WARNING);
-    }
+        }
     }
 
     @FXML
@@ -263,7 +288,6 @@ public class FileselectionController {
             }
             
             String updatedContent = fileTextArea.getText();
-
           
             Path filePath = Paths.get(selectedFile.getFilePath());
             Files.writeString(filePath, updatedContent, StandardCharsets.UTF_8);
@@ -278,7 +302,6 @@ public class FileselectionController {
                 selectedFile.getFilePath()
             );
 
-           
             selectedFile.setFileLength(newFileLength);
             selectedFile.setCrc32(newCrc32);
             fileTableView.refresh();
@@ -290,7 +313,7 @@ public class FileselectionController {
         }
     } else {
         showAlert("Warning", "Please select a file to update.", Alert.AlertType.WARNING);
-    }
+        }
     }
 
     @FXML
@@ -336,7 +359,7 @@ public class FileselectionController {
         }
     } else {
         showAlert("Warning", "Please select a file to delete.", Alert.AlertType.WARNING);
-    }
+        }
     }
     
     @FXML
@@ -356,6 +379,7 @@ public class FileselectionController {
     
     @FXML
     public void shareWriteFileWithUser(ActionEvent event) throws ClassNotFoundException, SQLException{
+        
         FileModel selectedFile = (FileModel) fileTableView.getSelectionModel().getSelectedItem();
         User selectedUser = (User) userSelectionTable.getSelectionModel().getSelectedItem();
 
@@ -369,6 +393,57 @@ public class FileselectionController {
         }
     }
     
+    @FXML
+    public void downloadFileHandler(ActionEvent event){
+        
+        FileModel selectedFile = (FileModel) fileTableView.getSelectionModel().getSelectedItem();
+
+        if (selectedFile != null) {
+            try {
+
+                List<String> chunks = db.getChunksForFile(selectedFile.getFileId());
+
+                Request request = new Request(userId, selectedFile.getFileId(), Request.OperationType.DOWNLOAD, selectedFile.getFileLength(), 1, chunks);
+
+                mqttClient.sendRequest(request);
+
+                showAlert("Info", "Download request sent!", Alert.AlertType.INFORMATION);
+
+            } catch (Exception e) {
+                e.printStackTrace();
+                showAlert("Error", "Failed to send download request!", Alert.AlertType.ERROR);
+                }
+            } else {
+                showAlert("Warning", "Please select a file to download.", Alert.AlertType.WARNING);
+            }
+    }
+    
+    
+    
+    private void openContainerTerminal(Container container) {
+        new Thread(container::openRemoteTerminal).start(); 
+        }
+    
+    @FXML
+    public void selectContainer1Handler(ActionEvent event){
+        openContainerTerminal(container1);
+    }
+    
+    @FXML
+    public void selectContainer2Handler(ActionEvent event){
+        openContainerTerminal(container2);
+        }
+    
+    @FXML
+    public void selectContainer3Handler(ActionEvent event){
+        openContainerTerminal(container3);
+        }
+    
+    @FXML
+    public void selectContainer4Handler(ActionEvent event){
+        openContainerTerminal(container4);
+        }
+    
     
     
     public void initialiseUsers(String[] credentials) throws ClassNotFoundException, SQLException{
@@ -376,12 +451,10 @@ public class FileselectionController {
         this.userId = Integer.parseInt(credentials[1]);
         
         welcomeText.setText(credentials[0]);
-        System.out.println("Name" + credentials[0]);
         
         DB myObj = new DB();
         ObservableList<User> data;
         
-
         try {
            
             data = myObj.getUserData();
@@ -398,15 +471,14 @@ public class FileselectionController {
             userSelectionTable.getColumns().addAll(userColumn, passColumn, roleColumn);
             userSelectionTable.setItems(data);
             
-    } catch (ClassNotFoundException ex) {
-        Logger.getLogger(SecondaryController.class.getName()).log(Level.SEVERE, null, ex);
+        } catch (ClassNotFoundException ex) {
+            Logger.getLogger(SecondaryController.class.getName()).log(Level.SEVERE, null, ex);
+        }
     }
-}
         
     public void initialiseFiles(String[] credentials) throws ClassNotFoundException, SQLException{
         
         int userId = Integer.parseInt(credentials[1]);
-        System.out.println("User ID: " + credentials [0] + " "+ credentials[1]);
         
         db = new DB();
         
@@ -429,15 +501,12 @@ public class FileselectionController {
             
             fileTableView.getColumns().addAll(fileIdColumn, fileNameColumn, fileLengthColumn, fileCRC32Column, filePathColumn);
             fileTableView.setItems(userFiles);
-    }
+        }
     
-    private void showAlert(String title, String content, Alert.AlertType alertType) {
+        private void showAlert(String title, String content, Alert.AlertType alertType) {
         Alert alert = new Alert(alertType);
         alert.setTitle(title);
         alert.setContentText(content);
         alert.showAndWait();
-    }
-
-
-    
+            }   
 }

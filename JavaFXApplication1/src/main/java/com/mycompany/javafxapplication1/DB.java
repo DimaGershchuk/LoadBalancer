@@ -11,11 +11,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
-
-
 import java.util.Base64;
-import java.nio.charset.StandardCharsets;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.security.spec.InvalidKeySpecException;
@@ -189,26 +185,26 @@ public class DB {
     
     public String getUserRole(String username) {
      
-    String role = null;
-    String query = "SELECT role FROM Users WHERE name = ?";
-    
-    try (Connection connection = DriverManager.getConnection(fileName);
-         PreparedStatement pstmt = connection.prepareStatement(query)) {
-        
-        pstmt.setString(1, username); 
-        try(ResultSet rs = pstmt.executeQuery()){
-        
-        if (rs.next()) {  
-            role = rs.getString("role");
-        } else {
-            System.out.println("User not found.");
-        } }
-    } catch (SQLException e) {
-        System.err.println("Error during sql query" + e.getMessage());
-        e.printStackTrace();
+        String role = null;
+        String query = "SELECT role FROM Users WHERE name = ?";
+
+        try (Connection connection = DriverManager.getConnection(fileName);
+             PreparedStatement pstmt = connection.prepareStatement(query)) {
+
+            pstmt.setString(1, username); 
+            try(ResultSet rs = pstmt.executeQuery()){
+
+            if (rs.next()) {  
+                role = rs.getString("role");
+            } else {
+                System.out.println("User not found.");
+            } }
+        } catch (SQLException e) {
+            System.err.println("Error during sql query" + e.getMessage());
+            e.printStackTrace();
+        }
+        return role;
     }
-    return role;
-}
     
     public ObservableList<User> getUsersWithRoleUser() throws ClassNotFoundException, SQLException {
         
@@ -227,9 +223,9 @@ public class DB {
 
         while (rs.next()) {
             result.add(new User(rs.getInt("id"), rs.getString("name"), rs.getString("password"), rs.getString("role")));
-        }
-        }
-        }   catch (SQLException ex) {
+            }
+         }
+            } catch (SQLException ex) {
         Logger.getLogger(DB.class.getName()).log(Level.SEVERE, null, ex);
     
         }
@@ -258,23 +254,24 @@ public class DB {
     
     
     public boolean updateUser(String originalUsername, String newUsername, String newPassword, String newRole) throws InvalidKeySpecException {
-    String query = "UPDATE Users SET name = ?, password = ?, role = ? WHERE name = ?";
-    try (Connection connection = DriverManager.getConnection(fileName);
-         PreparedStatement pstmt = connection.prepareStatement(query)) {
+        String query = "UPDATE Users SET name = ?, password = ?, role = ? WHERE name = ?";
+        try (Connection connection = DriverManager.getConnection(fileName);
+             PreparedStatement pstmt = connection.prepareStatement(query)) {
 
-        pstmt.setString(1, newUsername);
-        pstmt.setString(2, generateSecurePassword(newPassword));
-        pstmt.setString(3, newRole);
-        pstmt.setString(4, originalUsername);
+            pstmt.setString(1, newUsername);
+            pstmt.setString(2, generateSecurePassword(newPassword));
+            pstmt.setString(3, newRole);
+            pstmt.setString(4, originalUsername);
 
-        int rowsUpdated = pstmt.executeUpdate();
-        return rowsUpdated > 0;
-    } catch (SQLException ex) {
-        Logger.getLogger(DB.class.getName()).log(Level.SEVERE, null, ex);
-        return false;
-    }
+            int rowsUpdated = pstmt.executeUpdate();
+            return rowsUpdated > 0;
+        } catch (SQLException ex) {
+            Logger.getLogger(DB.class.getName()).log(Level.SEVERE, null, ex);
+            return false;
+        }
    
-}
+    }
+    
     public boolean deleteUser(String username){
         
         if (connection == null) {
@@ -290,7 +287,7 @@ public class DB {
         }  catch(SQLException ex){  
             Logger.getLogger(DB.class.getName()).log(Level.SEVERE, null, ex);
             return false;
-    }
+        }
     }
     
     /**
@@ -494,8 +491,8 @@ public class DB {
             chunkStmt.setString(1, file_id);
             chunkStmt.executeUpdate();
             
-            }
-            }
+                    }
+                }
             }
             
         } catch(SQLException e) {
@@ -591,12 +588,12 @@ public class DB {
                     e.printStackTrace();
                 }
             return false;
-        }
+    }
     
-        public List<String> getChunksForFile(String fileId) throws SQLException, ClassNotFoundException {
+    public List<String> getChunksForFile(String fileId) throws SQLException, ClassNotFoundException {
             
-            List<String> chunks = new ArrayList<>();
-            String query = "SELECT chunk_id FROM chunks WHERE file_id = ?";
+        List<String> chunks = new ArrayList<>();
+        String query = "SELECT chunk_id FROM chunks WHERE file_id = ?";
 
             if (connection == null) {
                 connection = initConnection();

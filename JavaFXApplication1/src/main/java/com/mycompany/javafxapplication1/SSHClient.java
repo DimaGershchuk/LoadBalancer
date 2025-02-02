@@ -6,8 +6,11 @@ package com.mycompany.javafxapplication1;
 
 import java.io.BufferedReader;
 import com.jcraft.jsch.*;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
+
 /**
  *
  * @author ntu-user
@@ -40,6 +43,28 @@ public class SSHClient {
         channelSftp.connect();
         channelSftp.put(localPath, remotePath);
         channelSftp.disconnect();
+    }
+    
+    public void downloadFile(String remoteFilePath, String localFilePath) throws JSchException, SftpException {
+        if (session == null || !session.isConnected()) {
+            throw new IllegalStateException("SSH session is not connected.");
+        }
+
+        Channel channel = session.openChannel("sftp");
+        channel.connect();
+
+        ChannelSftp sftpChannel = (ChannelSftp) channel;
+
+        try (OutputStream outputStream = new FileOutputStream(localFilePath)) {
+            sftpChannel.get(remoteFilePath, outputStream);
+            System.out.println("Downloaded file from " + remoteFilePath + " to " + localFilePath);
+        } catch (Exception e) {
+            System.err.println("Error downloading file: " + e.getMessage());
+            e.printStackTrace();
+        } finally {
+            sftpChannel.exit();
+            channel.disconnect();
+        }
     }
 
     public void executeCommand(String command) throws JSchException, IOException {

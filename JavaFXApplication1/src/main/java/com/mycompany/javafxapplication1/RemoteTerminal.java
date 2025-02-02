@@ -14,7 +14,7 @@ import java.util.Scanner;
  */
 public class RemoteTerminal {
     
-     private final String host;
+    private final String host;
     private final int port;
     private final String username;
     private final String password;
@@ -37,19 +37,15 @@ public class RemoteTerminal {
             session.connect();
 
             Channel channel = session.openChannel("shell");
-            channel.setInputStream(System.in);
-            channel.setOutputStream(System.out);
+            channel.setInputStream(System.in); 
+            channel.setOutputStream(System.out);  
             channel.connect();
 
-            System.out.println("Connected to " + host + ". Type 'exit' to close the session.");
-            
-            // Wait for the user to type "exit"
-            Scanner scanner = new Scanner(System.in);
-            while (true) {
-                String command = scanner.nextLine();
-                if ("exit".equalsIgnoreCase(command.trim())) {
-                    break;
-                }
+            System.out.println("Connected to " + host + ". Type 'exit' inside the terminal to close the session.");
+
+   
+            while (!channel.isClosed()) {
+                Thread.sleep(1000);
             }
 
             channel.disconnect();

@@ -4,11 +4,8 @@
  */
 package com.mycompany.javafxapplication1;
 
-import java.util.concurrent.TimeUnit;
 import com.jcraft.jsch.*;
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
+
 /**
  *
  * @author ntu-user
@@ -41,14 +38,15 @@ public class Container {
     
     public void deleteChunk(String chunk) {
         String remoteFilePath = "/files/" + chunk;
-        try {
-            sshClient.executeCommand("rm -f " + remoteFilePath);
-            System.out.println("Deleted chunk " + chunk + " from " + id);
-        } catch (Exception e) {
-            System.err.println("Failed to delete chunk " + chunk + " from " + id);
-            e.printStackTrace();
+            try {
+                sshClient.executeCommand("rm -f " + remoteFilePath);
+                System.out.println("Deleted chunk " + chunk + " from " + id);
+                
+            } catch (Exception e) {
+                System.err.println("Failed to delete chunk " + chunk + " from " + id);
+                e.printStackTrace();
+            }
         }
-    }
 
     public synchronized void sendFileToContainer(String chunk) {
         currentLoad++;
@@ -60,6 +58,17 @@ public class Container {
             e.printStackTrace();
         } finally {
             currentLoad--;
+        }
+    }
+    
+    public void downloadChunk(String chunk, String destinationPath){
+        
+        try{
+            sshClient.downloadFile("files/" + chunk, destinationPath);  
+            
+        } catch(Exception e ){
+            System.err.println("Failed to download chunk " + chunk + " from " + id);
+            e.printStackTrace();
         }
     }
     
