@@ -11,6 +11,7 @@ import java.nio.file.*;
 import java.security.*;
 import java.util.*;
 import javax.crypto.spec.SecretKeySpec;
+import com.mycompany.javafxapplication1.Container;
 /**
  *
  * @author ntu-user
@@ -18,7 +19,7 @@ import javax.crypto.spec.SecretKeySpec;
 public class FileChunking {
     
     
-        public static List<String> chunkFile(File inputFile, String outputDir, int numberChunks, String fileId) throws NoSuchAlgorithmException, FileNotFoundException, IOException, ClassNotFoundException, Exception {
+        public static List<String> chunkFile(File inputFile, String outputDir, int numberChunks, String fileId, LoadBalancer loadBalancer) throws NoSuchAlgorithmException, FileNotFoundException, IOException, ClassNotFoundException, Exception {
         
         KeyGenerator keyGen = KeyGenerator.getInstance("AES");
         keyGen.init(256);
@@ -52,10 +53,14 @@ public class FileChunking {
                 fos.write(chunk);
             }
 
-            chunkNames.add(chunkName); // Додаємо ім'я чанка у список
-            
             DB db = new DB();
-            db.addChunkMetaData(chunkName, fileId, container_id);
+            
+            Container selectedContainer = loadBalancer.selectContainerForChunk(chunkName);
+            String containerId = selectedContainer.getId();
+            
+            db.addChunkMetaData(chunkName, fileId, containerId);
+            
+            chunkNames.add(chunkName);
         }
         
         return chunkNames;  // Повертаємо список імен чанків

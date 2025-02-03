@@ -180,7 +180,7 @@ public class FileselectionController {
             String fileId = db.addFileToUser(filename, fileLength, crc32, filePath,  this.userId);
             
             
-            List<String> chunks = FileChunking.chunkFile(selectedFile, "chunks/", 4, fileId);
+            List<String> chunks = FileChunking.chunkFile(selectedFile, "chunks/", 4, fileId, loadBalancer);
             
             Request request = new Request(userId, fileId, Request.OperationType.UPLOAD, fileLength, 1, chunks);
             mqttClient.sendRequest(request);
@@ -234,7 +234,7 @@ public class FileselectionController {
 
                     String outputDir = "chunks/";  
                     int numberOfChunks = 4;  
-                    FileChunking.chunkFile(selectedFile, outputDir, numberOfChunks, fileId);
+                    FileChunking.chunkFile(selectedFile, outputDir, numberOfChunks, fileId, loadBalancer);
 
                     FileModel newFileModel = new FileModel(fileId, fileName, fileLength, crc32, filePath);
                     fileTableView.getItems().add(newFileModel);

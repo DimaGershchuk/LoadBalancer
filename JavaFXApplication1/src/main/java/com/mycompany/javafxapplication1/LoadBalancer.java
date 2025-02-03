@@ -7,17 +7,19 @@ import java.util.*;
 import java.io.*;
 import java.nio.file.Files;
 import org.eclipse.paho.client.mqttv3.*;
+import com.mycompany.javafxapplication1.Container;
 
 
 public class LoadBalancer{
     
-     private final List<Container> containers;
+    private final List<Container> containers;
     private final Queue<Request> waitingQueue;
     private final Queue<Request> processingQueue;
     private final Queue<Request> readyQueue;
     private final Random random;
     private final int maxConcurrentRequests;
     private int roundRobinIndex = 0;
+    private DB db;
     
     private MqttClient mqttClient;
     
@@ -35,6 +37,7 @@ public class LoadBalancer{
         this.readyQueue = new LinkedList<>();
         this.random = new Random();
         this.maxConcurrentRequests = maxConcurrentRequests;
+        this.db = new DB();
 
         try {
             mqttClient = new MqttClient("tcp://mqtt-broker:1883", MqttClient.generateClientId());
@@ -82,9 +85,17 @@ public class LoadBalancer{
         }
     }
     
-    private Container selectContainerForChunk(String chunk) {
-        int containerIndex = Math.abs(chunk.hashCode()) % containers.size();
-        return containers.get(containerIndex);
+    public Container selectContainerForChunk(String chunkId) {
+       String containerId = db.getContainerIdForChunk(chunkId);
+        if (containerId != null) {
+            for (Container container : containers) {
+                if (container.getId().equals(containerId)) {
+                return container;
+            }
+        }
+    }
+        System.err.println("Container not found for chunk: " + chunkId);
+        return null;
     }
     
     private void uploadFile(Request request) {
@@ -295,12 +306,10 @@ public class LoadBalancer{
             containers.add(new Container("container3", "soft40051-files-container3", 22, "ntu-user", "ntu-user"));
             containers.add(new Container("container4", "soft40051-files-container4", 22, "ntu-user", "ntu-user"));
             
-            
+           
             LoadBalancer loadBalancer = new LoadBalancer(containers, 2);
             System.out.println("✅Load Balancer connect to MQTT borker!");
             
-            
-       
 
         } catch (Exception e) {
             e.printStackTrace();

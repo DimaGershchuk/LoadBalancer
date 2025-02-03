@@ -470,6 +470,21 @@ public class DB {
         }
     }
     
+    public String getContainerIdForChunk(String chunkId) {
+        
+        String query = "SELECT container_id FROM chunks WHERE chunk_id = ?";
+        try (PreparedStatement pstmt = connection.prepareStatement(query)) {
+            pstmt.setString(1, chunkId);
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                return rs.getString("container_id");
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+    
     public void addPermissionToFile(String fileId, int userId, boolean canRead, boolean canWrite) throws ClassNotFoundException, SQLException{
         
         String checkSql = "SELECT * FROM acl WHERE file_id = ? AND user_id = ?";
