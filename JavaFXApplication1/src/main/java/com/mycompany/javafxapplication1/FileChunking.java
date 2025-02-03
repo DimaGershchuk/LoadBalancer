@@ -55,7 +55,7 @@ public class FileChunking {
             chunkNames.add(chunkName); // Додаємо ім'я чанка у список
             
             DB db = new DB();
-            db.addChunkMetaData(chunkName, fileId);
+            db.addChunkMetaData(chunkName, fileId, container_id);
         }
         
         return chunkNames;  // Повертаємо список імен чанків

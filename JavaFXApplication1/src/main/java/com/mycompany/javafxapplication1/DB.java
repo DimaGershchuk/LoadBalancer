@@ -4,6 +4,7 @@
  */
 package com.mycompany.javafxapplication1;
 
+import java.sql.Statement;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -33,9 +34,11 @@ import javax.crypto.spec.PBEKeySpec;
  * @author ntu-user
  */
 public class DB {
-    private String fileName = "jdbc:sqlite:comp20081.db";
+    private String jdbcUrl = "jdbc:mysql://mySql:3306/Coursework";  // Змінено для MySQL
+    private String username = "root";  // Вкажіть свій логін
+    private String password = "280104";
     private int timeout = 30;
-    private String dataBaseName = "COMP20081";
+    private String dataBaseName = "Coursework";
     private String dataBaseTableName = "users";
     private Connection connection = null;
     private Random random = new SecureRandom();
@@ -69,8 +72,8 @@ public class DB {
     
      private Connection initConnection() {
         try {
-            Class.forName("org.sqlite.JDBC");
-            return DriverManager.getConnection(fileName);
+            Class.forName("com.mysql.jdbc.Driver");
+            return DriverManager.getConnection(jdbcUrl, username, password);
         } catch (ClassNotFoundException | SQLException ex) {
             Logger.getLogger(DB.class.getName()).log(Level.SEVERE, null, ex);
             return null;
@@ -94,38 +97,14 @@ public class DB {
      * @param tableName name of type String
      */
     public void createTable(String tableName) throws ClassNotFoundException {
-        try {
-            
-            if (connection == null) {
-            connection = initConnection();
-                }
-        
-            var statement = connection.createStatement();
-            statement.setQueryTimeout(timeout);
-            statement.executeUpdate("create table if not exists " + tableName + "(id integer primary key autoincrement, name string, password string, role string)");
-
+        String query = "CREATE TABLE IF NOT EXISTS " + tableName +
+                       " (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255), password VARCHAR(255), role VARCHAR(50))";
+        try (Statement stmt = connection.createStatement()) {
+            stmt.setQueryTimeout(timeout);
+            stmt.executeUpdate(query);
         } catch (SQLException ex) {
             Logger.getLogger(DB.class.getName()).log(Level.SEVERE, null, ex);
         } 
-    }
-
-    /**
-     * @brief delete table
-     * @param tableName of type String
-     */
-   public void delTable(String tableName) throws ClassNotFoundException {
-        try {
-            if (connection == null) {
-            connection = initConnection();
-                }
-            
-            var statement = connection.createStatement();
-            statement.setQueryTimeout(timeout);
-            statement.executeUpdate("drop table if exists " + tableName);
-        } catch (SQLException ex) {
-            Logger.getLogger(DB.class.getName()).log(Level.SEVERE, null, ex);
-        } 
-        
     }
 
     /**
@@ -134,26 +113,14 @@ public class DB {
      * @param password of type String
      */
         public void addDataToDB(String user, String password, String role) throws InvalidKeySpecException, ClassNotFoundException {
-        try {
-            
-            if (connection == null) {
-            connection = initConnection();
-                }
-            
-            var statement = connection.createStatement();
-            statement.setQueryTimeout(timeout);
-            statement.executeUpdate("insert into " + dataBaseTableName + " (name, password, role) values('" + user + "','" + generateSecurePassword(password) + "', '"+ role +"')");
+        String query = "INSERT INTO " + dataBaseTableName + " (name, password, role) VALUES (?, ?, ?)";
+        try (PreparedStatement pstmt = connection.prepareStatement(query)) {
+            pstmt.setString(1, user);
+            pstmt.setString(2, generateSecurePassword(password));
+            pstmt.setString(3, role);
+            pstmt.executeUpdate();
         } catch (SQLException ex) {
             Logger.getLogger(DB.class.getName()).log(Level.SEVERE, null, ex);
-        } finally {
-            try {
-                if (connection != null) {
-                    connection.close();
-                }
-            } catch (SQLException ex) {
-                Logger.getLogger(DB.class.getName()).log(Level.SEVERE, null, ex);
-            } 
-            
         }
     }
 
@@ -162,23 +129,17 @@ public class DB {
      * @retunr results as ResultSet
      */
     public ObservableList<User> getUserData() throws ClassNotFoundException {
+        
         ObservableList<User> result = FXCollections.observableArrayList();
-        try {
-            
-            if (connection == null) {
-            connection = initConnection();
-                }
-
-            var statement = connection.createStatement();
-            statement.setQueryTimeout(timeout);
-            try(ResultSet rs = statement.executeQuery("select * from " + this.dataBaseTableName)){
+        String query = "SELECT * FROM " + dataBaseTableName;
+        try (Statement stmt = connection.createStatement();
+             ResultSet rs = stmt.executeQuery(query)) {
             while (rs.next()) {
-                result.add(new User(rs.getInt("id"), rs.getString("name"),rs.getString("password"), rs.getString("role")));
+                result.add(new User(rs.getInt("id"), rs.getString("name"), rs.getString("password"), rs.getString("role")));
             }
-            
-        }} catch (SQLException ex) {
+        } catch (SQLException ex) {
             Logger.getLogger(DB.class.getName()).log(Level.SEVERE, null, ex);
-        } 
+        }
         return result;
     }
     
@@ -188,8 +149,8 @@ public class DB {
         String role = null;
         String query = "SELECT role FROM Users WHERE name = ?";
 
-        try (Connection connection = DriverManager.getConnection(fileName);
-             PreparedStatement pstmt = connection.prepareStatement(query)) {
+        
+        try(PreparedStatement pstmt = connection.prepareStatement(query)) {
 
             pstmt.setString(1, username); 
             try(ResultSet rs = pstmt.executeQuery()){
@@ -255,8 +216,8 @@ public class DB {
     
     public boolean updateUser(String originalUsername, String newUsername, String newPassword, String newRole) throws InvalidKeySpecException {
         String query = "UPDATE Users SET name = ?, password = ?, role = ? WHERE name = ?";
-        try (Connection connection = DriverManager.getConnection(fileName);
-             PreparedStatement pstmt = connection.prepareStatement(query)) {
+        try (PreparedStatement pstmt = connection.prepareStatement(query)){
+              
 
             pstmt.setString(1, newUsername);
             pstmt.setString(2, generateSecurePassword(newPassword));
@@ -279,7 +240,7 @@ public class DB {
                 }
         
         String sql = "DELETE FROM Users WHERE name = ?";
-        try(Connection connection = DriverManager.getConnection(fileName);
+        try(
             PreparedStatement pstmt = connection.prepareStatement(sql)){
             pstmt.setString(1, username);
             int affectedRows = pstmt.executeUpdate();
@@ -297,30 +258,19 @@ public class DB {
      * @return true if the credentials are valid, otherwise false
      */
     public boolean validateUser(String user, String pass) throws InvalidKeySpecException, ClassNotFoundException {
-        Boolean flag = false;
-        try {
-            
-            if (connection == null) {
-            connection = initConnection();
+        String query = "SELECT password FROM " + dataBaseTableName + " WHERE name = ?";
+        try (PreparedStatement pstmt = connection.prepareStatement(query)) {
+            pstmt.setString(1, user);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    String storedPassword = rs.getString("password");
+                    return storedPassword.equals(generateSecurePassword(pass));
                 }
-
-            var statement = connection.createStatement();
-            statement.setQueryTimeout(timeout);
-            try(ResultSet rs = statement.executeQuery("select name, password from " + this.dataBaseTableName)){
-            String inPass = generateSecurePassword(pass);
-            // Let's iterate through the java ResultSet
-            while (rs.next()) {
-                if (user.equals(rs.getString("name")) && rs.getString("password").equals(inPass)) {
-                    flag = true;
-                    break;
-                }
-            }
             }
         } catch (SQLException ex) {
             Logger.getLogger(DB.class.getName()).log(Level.SEVERE, null, ex);
-        } 
-
-        return flag;
+        }
+        return false;
     }
 
     private String getSaltvalue(int length) {
@@ -466,42 +416,41 @@ public class DB {
     }
     
     public void deleteFileForUser(String file_id, int userId) throws ClassNotFoundException{
-        String deleteFileQuery = "DELETE FROM files WHERE file_id = ?";
-        String deleteAclQuery = "DELETE FROM acl WHERE file_id = ? AND user_id = ?";
-        String deleteChunksQuery = "DELETE FROM chunks WHERE file_id = ?";
         
-        try {
-            
-            if (connection == null) {
-            connection = initConnection();
-                }
+    String deleteChunksQuery = "DELETE FROM chunks WHERE file_id = ?";
+    String deleteAclQuery = "DELETE FROM acl WHERE file_id = ? AND user_id = ?";
+    String deleteFileQuery = "DELETE FROM files WHERE file_id = ?";
 
-            try(PreparedStatement aclStmt = connection.prepareStatement(deleteAclQuery)){
-            
-            
+    try {
+        if (connection == null) {
+            connection = initConnection();
+        }
+
+        try (PreparedStatement chunkStmt = connection.prepareStatement(deleteChunksQuery)) {
+            chunkStmt.setString(1, file_id);
+            chunkStmt.executeUpdate();
+        }
+
+        try (PreparedStatement aclStmt = connection.prepareStatement(deleteAclQuery)) {
             aclStmt.setString(1, file_id);
             aclStmt.setInt(2, userId);
             aclStmt.executeUpdate();
+        }
 
-            try(PreparedStatement fileStmt = connection.prepareStatement(deleteFileQuery)){
+        try (PreparedStatement fileStmt = connection.prepareStatement(deleteFileQuery)) {
             fileStmt.setString(1, file_id);
             fileStmt.executeUpdate();
-            
-            try(PreparedStatement chunkStmt = connection.prepareStatement(deleteChunksQuery)){
-            chunkStmt.setString(1, file_id);
-            chunkStmt.executeUpdate();
-            
-                    }
-                }
-            }
-            
-        } catch(SQLException e) {
-            e.printStackTrace();
         }
+
+        System.out.println("File and related chunks deleted successfully.");
+        
+    } catch (SQLException e) {
+        e.printStackTrace();
+    }
     }
     
-    public void addChunkMetaData(String chunkId, String fileId) throws ClassNotFoundException{
-        String sql = "INSERT INTO chunks (chunk_id, file_id) VALUES (?, ?)";
+    public void addChunkMetaData(String chunkId, String fileId, String container_id) throws ClassNotFoundException{
+        String sql = "INSERT INTO chunks (chunk_id, file_id, container_id) VALUES (?, ?)";
         
         try {
             
@@ -512,6 +461,7 @@ public class DB {
             try(PreparedStatement pstmt = connection.prepareStatement(sql)){
             pstmt.setString(1, chunkId);
             pstmt.setString(2, fileId);
+            pstmt.setString(3, container_id);
             pstmt.executeUpdate();
             
             }

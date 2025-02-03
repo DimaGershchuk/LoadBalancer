@@ -144,7 +144,7 @@ public class LoadBalancer{
             for(String chunk : chunks){
                 Container container = selectContainerForChunk(chunk);
                 if (container != null) {
-                container.downloadChunk(chunk, "downloads/" + chunk); 
+                container.downloadChunk(chunk, "/home/ntu-user/Downloads/" + chunk); 
                 System.out.println("Downloaded chunk " + chunk + " from " + container.getId());
                 }
             }
@@ -159,9 +159,9 @@ public class LoadBalancer{
 
     public void combineChunks(List<String> chunks, String fileId) throws FileNotFoundException, IOException{
         
-        try(FileOutputStream fos = new FileOutputStream("downloads/" + fileId)){
+        try(FileOutputStream fos = new FileOutputStream("/home/ntu-user/Downloads/" + fileId)){
             for(String chunk : chunks){
-                File chunkFile = new File("dowload/" + fileId);
+                File chunkFile = new File("/home/ntu-user/Downloads/" + chunk);
                 Files.copy(chunkFile.toPath(), fos);
                 chunkFile.delete();
             }
