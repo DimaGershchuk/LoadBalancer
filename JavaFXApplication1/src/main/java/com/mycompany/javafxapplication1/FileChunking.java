@@ -11,15 +11,21 @@ import java.nio.file.*;
 import java.security.*;
 import java.util.*;
 import javax.crypto.spec.SecretKeySpec;
-import com.mycompany.javafxapplication1.Container;
+
+
 /**
  *
  * @author ntu-user
  */
 public class FileChunking {
     
-    
-        public static List<String> chunkFile(File inputFile, String outputDir, int numberChunks, String fileId, LoadBalancer loadBalancer) throws NoSuchAlgorithmException, FileNotFoundException, IOException, ClassNotFoundException, Exception {
+    private LoadBalancer loadBalancer;
+
+    public FileChunking(LoadBalancer loadBalancer) {
+        this.loadBalancer = loadBalancer; 
+    }
+
+        public List<String> chunkFile(File inputFile, String outputDir, int numberChunks, String fileId) throws NoSuchAlgorithmException, FileNotFoundException, IOException, ClassNotFoundException, Exception {
         
         KeyGenerator keyGen = KeyGenerator.getInstance("AES");
         keyGen.init(256);
@@ -52,18 +58,21 @@ public class FileChunking {
             try (FileOutputStream fos = new FileOutputStream(chunkFile)) {
                 fos.write(chunk);
             }
-
+            
             DB db = new DB();
-            
-            Container selectedContainer = loadBalancer.selectContainerForChunk(chunkName);
-            String containerId = selectedContainer.getId();
-            
-            db.addChunkMetaData(chunkName, fileId, containerId);
-            
-            chunkNames.add(chunkName);
-        }
+
+            Container selectedContainer = loadBalancer.roundRobin();
+            if (selectedContainer != null) {
+                String containerId = selectedContainer.getId();
+                System.out.println("Adding chunk to DB: " + chunkName + ", fileId: " + fileId + ", containerId: " + containerId);
+
+                db.addChunkMetaData(chunkName, fileId, containerId);
+                chunkNames.add(chunkName);
+        } else {
+            System.err.println("❌ No container available for chunk: " + chunkName);
+        }}
         
-        return chunkNames;  // Повертаємо список імен чанків
+        return chunkNames; 
     }
 
     private static byte[] encryptFile(String inputFile, SecretKey key) throws Exception {

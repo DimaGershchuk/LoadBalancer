@@ -449,8 +449,8 @@ public class DB {
     }
     }
     
-    public void addChunkMetaData(String chunkId, String fileId, String container_id) throws ClassNotFoundException{
-        String sql = "INSERT INTO chunks (chunk_id, file_id, container_id) VALUES (?, ?)";
+    public void addChunkMetaData(String chunkId, String fileId, String containerId) throws ClassNotFoundException{
+        String sql = "INSERT INTO chunks (chunk_id, file_id, container_id) VALUES (?, ?, ?)";
         
         try {
             
@@ -461,17 +461,17 @@ public class DB {
             try(PreparedStatement pstmt = connection.prepareStatement(sql)){
             pstmt.setString(1, chunkId);
             pstmt.setString(2, fileId);
-            pstmt.setString(3, container_id);
+            pstmt.setString(3, containerId);
             pstmt.executeUpdate();
-            
+            System.out.println("✅Chunk metadata added: " + chunkId + " (Container: " + containerId + ")");
             }
         } catch(SQLException e) {
             e.printStackTrace();
+            System.err.println("❌Failed to add chunk metadata for chunk: " + chunkId);
         }
     }
     
     public String getContainerIdForChunk(String chunkId) {
-        
         String query = "SELECT container_id FROM chunks WHERE chunk_id = ?";
         try (PreparedStatement pstmt = connection.prepareStatement(query)) {
             pstmt.setString(1, chunkId);

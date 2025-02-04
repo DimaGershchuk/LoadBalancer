@@ -14,6 +14,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.Scanner;
@@ -110,7 +112,6 @@ public class FileselectionController {
     private File selectedFile;
    
     private MQTTClient mqttClient;
-    private LoadBalancer loadBalancer;
     
     private int userId;
     private DB db;
@@ -121,18 +122,20 @@ public class FileselectionController {
     private Container container4;
     
     @FXML
-    public void initialize() {
-        container1 = new Container("container1", "soft40051-files-container1", 22, "ntu-user", "ntu-user");
-        container2 = new Container("container2", "soft40051-files-container2", 22, "ntu-user", "ntu-user");
-        container3 = new Container("container3", "soft40051-files-container3", 22, "ntu-user", "ntu-user");
-        container4 = new Container("container4", "soft40051-files-container4", 22, "ntu-user", "ntu-user");
-    }
+            
+    List<Container> containers = Arrays.asList(
+        new Container("container1", "soft40051-files-container1", 22, "ntu-user", "ntu-user"),
+        new Container("container2", "soft40051-files-container2", 22, "ntu-user", "ntu-user"),
+        new Container("container3", "soft40051-files-container3", 22, "ntu-user", "ntu-user"),
+        new Container("container4", "soft40051-files-container4", 22, "ntu-user", "ntu-user")
+    );
 
+    LoadBalancer loadBalancer = new LoadBalancer(containers, 2);
+    
+    FileChunking fileChunking = new FileChunking(loadBalancer);
 
     public FileselectionController() throws MqttException {  
-        
         this.mqttClient = new MQTTClient();
-    
     }
             
    
@@ -180,7 +183,7 @@ public class FileselectionController {
             String fileId = db.addFileToUser(filename, fileLength, crc32, filePath,  this.userId);
             
             
-            List<String> chunks = FileChunking.chunkFile(selectedFile, "chunks/", 4, fileId, loadBalancer);
+            List<String> chunks = fileChunking.chunkFile(selectedFile, "chunks/", 4, fileId);
             
             Request request = new Request(userId, fileId, Request.OperationType.UPLOAD, fileLength, 1, chunks);
             mqttClient.sendRequest(request);
@@ -234,7 +237,7 @@ public class FileselectionController {
 
                     String outputDir = "chunks/";  
                     int numberOfChunks = 4;  
-                    FileChunking.chunkFile(selectedFile, outputDir, numberOfChunks, fileId, loadBalancer);
+                    fileChunking.chunkFile(selectedFile, outputDir, numberOfChunks, fileId);
 
                     FileModel newFileModel = new FileModel(fileId, fileName, fileLength, crc32, filePath);
                     fileTableView.getItems().add(newFileModel);
@@ -508,5 +511,6 @@ public class FileselectionController {
         alert.setTitle(title);
         alert.setContentText(content);
         alert.showAndWait();
-            }   
+            
+        }   
 }

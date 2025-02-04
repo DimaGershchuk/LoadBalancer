@@ -35,11 +35,11 @@ public class MQTTClient {
         System.out.println("Connected to MQTT broker at " + BROKER_URL);
     }
 
-    // Відправка запиту в Load Balancer
+    // Send request to LoadBalancer
     public void sendRequest(Request request) throws MqttException {
         String jsonRequest = gson.toJson(request);
         MqttMessage message = new MqttMessage(jsonRequest.getBytes());
-        message.setQos(1);  // Гарантія доставки повідомлення
+        message.setQos(1);
         client.publish(TOPIC, message);
         System.out.println("Sent MQTT request: " + jsonRequest);
     }
@@ -47,7 +47,6 @@ public class MQTTClient {
     public void subscribe() throws MqttException {
         client.subscribe(TOPIC, (topic, message) -> {
             String payload = new String(message.getPayload());
-            System.out.println("Received MQTT response: " + payload);
             handleResponse(payload);
         });
     }

@@ -31,6 +31,7 @@ public class LoadBalancer{
     private double trafficMultiplier = 1.0;  
 
     public LoadBalancer(List<Container> containers, int maxConcurrentRequests) {
+        
         this.containers = containers;
         this.waitingQueue = new LinkedList<>();
         this.processingQueue = new LinkedList<>();
@@ -43,9 +44,9 @@ public class LoadBalancer{
             mqttClient = new MqttClient("tcp://mqtt-broker:1883", MqttClient.generateClientId());
             mqttClient.connect();
             mqttClient.subscribe("load-balancer/file-operation", this::handleMqttMessage);
-            System.out.println("✅Load Balancer connected to MQTT broker!");
             mqttClient.subscribe("load-balancer/traffic-level", this::handleTrafficLevelMessage);
-            System.out.println("Subscribed to topic: load-balancer/file-operation");
+            
+            System.out.println("✅Load Balancer connected to MQTT broker!");
             
             
         } catch (MqttException e) {
@@ -54,14 +55,37 @@ public class LoadBalancer{
     }
     
     private List<Container> getHealthyContainers() {
-    List<Container> healthyContainers = new ArrayList<>();
-    for (Container container : containers) {
-        if (container.isHealthy()) {
-            healthyContainers.add(container);
+        List<Container> healthyContainers = new ArrayList<>();
+        for (Container container : containers) {
+            if (container.isHealthy()) {
+                healthyContainers.add(container);
+            }
+        }
+        return healthyContainers;
+    }
+    
+     private void handleTrafficLevelMessage(String topic, MqttMessage message) {
+        
+        String payload = new String(message.getPayload());
+        System.out.println("Traffic level message: " + payload);
+
+        switch (payload.trim().toUpperCase()) {
+            case "LOW":
+                this.trafficLevel = TrafficLevel.LOW;
+                this.trafficMultiplier = 1.0;
+                break;
+            case "MEDIUM":
+                this.trafficLevel = TrafficLevel.MEDIUM;
+                this.trafficMultiplier = 1.5;
+                break;
+            case "HIGH":
+                this.trafficLevel = TrafficLevel.HIGH;
+                this.trafficMultiplier = 2.0;
+                break;
+            default:
+                System.out.println("Unknown traffic level: " + payload);
         }
     }
-    return healthyContainers;
-}
 
     private void handleMqttMessage(String topic, MqttMessage message) throws JSchException, IOException, SftpException {
         String payload = new String(message.getPayload());
@@ -181,6 +205,19 @@ public class LoadBalancer{
             e.printStackTrace();
     }}
     
+        private void distributeChunks(Request request) throws JSchException, IOException, SftpException {
+        List<String> chunks = request.getChunks();
+        for (String chunk : chunks) {
+            Container selectedContainer = selectContainerForChunk(chunk);
+            if (selectedContainer != null) {
+                simulateDelay(); 
+                selectedContainer.sendFileToContainer(chunk);
+         
+            }
+        }
+        finalizeRequest(request);
+    }
+    
     /*private void updateFile(Request request) throws JSchException, IOException, SftpException {
     
          if (FileLockManager.isFileLocked(request.getFileId())) {
@@ -199,28 +236,6 @@ public class LoadBalancer{
         System.out.println("File " + request.getId() + " successfully updated.");
     }*/
 
-    private void handleTrafficLevelMessage(String topic, MqttMessage message) {
-        
-        String payload = new String(message.getPayload());
-        System.out.println("Traffic level message: " + payload);
-
-        switch (payload.trim().toUpperCase()) {
-            case "LOW":
-                this.trafficLevel = TrafficLevel.LOW;
-                this.trafficMultiplier = 1.0;
-                break;
-            case "MEDIUM":
-                this.trafficLevel = TrafficLevel.MEDIUM;
-                this.trafficMultiplier = 1.5;
-                break;
-            case "HIGH":
-                this.trafficLevel = TrafficLevel.HIGH;
-                this.trafficMultiplier = 2.0;
-                break;
-            default:
-                System.out.println("Unknown traffic level: " + payload);
-        }
-    }
 
     public void addRequest(Request request) throws JSchException, IOException, SftpException{
         synchronized (waitingQueue) {
@@ -245,19 +260,6 @@ public class LoadBalancer{
         }
     }
 
-    private void distributeChunks(Request request) throws JSchException, IOException, SftpException {
-        List<String> chunks = request.getChunks();
-        for (String chunk : chunks) {
-            Container selectedContainer = roundRobin();
-            if (selectedContainer != null) {
-                simulateDelay(); 
-                selectedContainer.sendFileToContainer(chunk);
-         
-            }
-        }
-        finalizeRequest(request);
-    }
-
     private void finalizeRequest(Request request) {
         synchronized (processingQueue) {
             processingQueue.remove(request);
@@ -266,10 +268,10 @@ public class LoadBalancer{
         }
     }
 
-    private Container roundRobin() {
+    public Container roundRobin() {
         List<Container> healthyContainers = getHealthyContainers();
         if (healthyContainers.isEmpty()) {
-            System.out.println("❌ No healthy containers available.");
+            System.out.println("❌No healthy containers available.");
             return null;
         }
         Container selectedContainer = healthyContainers.get(roundRobinIndex % healthyContainers.size());

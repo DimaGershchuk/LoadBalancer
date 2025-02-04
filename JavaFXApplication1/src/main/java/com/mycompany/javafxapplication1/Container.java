@@ -83,11 +83,11 @@ public class Container {
             session.connect();
 
             session.disconnect();
-            System.out.println("✅ " + id + " is healthy.");
+            System.out.println(id + " is healthy.");
             return true;
             
         } catch (Exception e) {
-            System.err.println("❌ " + id + " is not responding.");
+            System.err.println(id + " is not responding.");
             return false;
         }
     }
