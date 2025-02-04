@@ -463,7 +463,6 @@ public class DB {
             pstmt.setString(2, fileId);
             pstmt.setString(3, containerId);
             pstmt.executeUpdate();
-            System.out.println("✅Chunk metadata added: " + chunkId + " (Container: " + containerId + ")");
             }
         } catch(SQLException e) {
             e.printStackTrace();
@@ -569,7 +568,6 @@ public class DB {
                 try (ResultSet rs = pstmt.executeQuery()) {
                     while (rs.next()) {
                     String chunkId = rs.getString("chunk_id");
-                    System.out.println("Retrieved chunk: " + chunkId);  
                     chunks.add(chunkId);
                 }
             }

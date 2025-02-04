@@ -211,47 +211,52 @@ public class FileselectionController {
     @FXML
     private void createFileHandler(ActionEvent event) throws FileNotFoundException, Exception {
         
-        TextInputDialog dialog = new TextInputDialog("NewFile.txt");
-        dialog.setTitle("Create New File");
-        dialog.setHeaderText("Enter the name for the new file:");
-        dialog.setContentText("File name:");
-        User selectedUser = (User) userSelectionTable.getSelectionModel().getSelectedItem();
+        try {
+            FXMLLoader loader = new FXMLLoader(getClass().getResource("CreateFileDialog.fxml"));
+            Parent root = loader.load();
 
-        Optional<String> result = dialog.showAndWait();
-        if (result.isPresent() && !result.get().isBlank()) {
-            String fileName = result.get().trim();
-            File newFile = new File(System.getProperty("user.home") + File.separator + fileName);
+            Stage dialogStage = new Stage();
+            dialogStage.setTitle("Create New File");
+            dialogStage.setScene(new Scene(root));
 
-            try {
+            CreateFileDialogController controller = loader.getController();
+            controller.setDialogStage(dialogStage);
+
+            dialogStage.showAndWait();
+
+            if (controller.isConfirmed()) {
+                String fileName = controller.getFileName();
+                String content = controller.getFileContent();
+                File newFile = new File(System.getProperty("user.home") + File.separator + fileName);
+
                 if (newFile.createNewFile()) {
                     FileWriter writer = new FileWriter(newFile);
-                    writer.write("This is the initial content of the file.\n"); 
+                    writer.write(content);
                     writer.close();
 
                     long fileLength = newFile.length();
-                    String content = Files.readString(newFile.toPath());
                     int crc32 = calculateCRC32(content);
 
                     String filePath = newFile.getAbsolutePath();
                     String fileId = db.addFileToUser(fileName, fileLength, crc32, filePath, this.userId);
 
-                    String outputDir = "chunks/";  
-                    int numberOfChunks = 4;  
-                    fileChunking.chunkFile(selectedFile, outputDir, numberOfChunks, fileId);
+                    List<String> chunks = fileChunking.chunkFile(selectedFile, "chunks/", 4, fileId);
+            
+                    Request request = new Request(userId, fileId, Request.OperationType.UPLOAD, fileLength, 1, chunks);
+                    mqttClient.sendRequest(request);
 
                     FileModel newFileModel = new FileModel(fileId, fileName, fileLength, crc32, filePath);
                     fileTableView.getItems().add(newFileModel);
 
-                    showAlert("Success", "File created s34uccessfully!", Alert.AlertType.INFORMATION);
+                    showAlert("Success", "File created successfully!", Alert.AlertType.INFORMATION);
                 } else {
                     showAlert("Warning", "File already exists!", Alert.AlertType.WARNING);
                 }
-            } catch (IOException | SQLException | ClassNotFoundException e) {
-                e.printStackTrace();
-                showAlert("Error", "Failed to create the file.", Alert.AlertType.ERROR);
             }
-        } else {
-            showAlert("Warning", "File name cannot be empty.", Alert.AlertType.WARNING);
+
+        } catch (IOException | SQLException | ClassNotFoundException e) {
+            e.printStackTrace();
+            showAlert("Error", "Failed to create the file.", Alert.AlertType.ERROR);
         }
     }
     
@@ -347,7 +352,15 @@ public class FileselectionController {
                 Request deleteRequest = new Request(userId, selectedFile.getFileId(), Request.OperationType.DELETE, 0, 1, chunks);
                 mqttClient.sendRequest(deleteRequest);
                 
-                db.deleteFileForUser(selectedFile.getFileId(), this.userId);
+                mqttClient.subscribeToDeletionConfirmation(selectedFile.getFileId(), () -> {
+                    try {
+                        db.deleteFileForUser(selectedFile.getFileId(), this.userId);
+                        fileTableView.getItems().remove(selectedFile);
+                        showAlert("Success", "File and its chunks deleted successfully!", Alert.AlertType.INFORMATION);
+                    } catch (ClassNotFoundException ex) {
+                        Logger.getLogger(FileselectionController.class.getName()).log(Level.SEVERE, null, ex);
+                    }
+                });
 
                 fileTableView.getItems().remove(selectedFile);
 

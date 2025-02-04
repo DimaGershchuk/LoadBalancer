@@ -51,7 +51,6 @@ public class FileChunking {
             int end = Math.min(start + chunkSize, encryptedFileBytes.length);
             byte[] chunk = Arrays.copyOfRange(encryptedFileBytes, start, end);
 
-            // Генерація унікального імені для кожного чанку
             String chunkName = UUID.randomUUID().toString();
             File chunkFile = new File(outputDir, chunkName);
             
@@ -62,15 +61,11 @@ public class FileChunking {
             DB db = new DB();
 
             Container selectedContainer = loadBalancer.roundRobin();
-            if (selectedContainer != null) {
-                String containerId = selectedContainer.getId();
-                System.out.println("Adding chunk to DB: " + chunkName + ", fileId: " + fileId + ", containerId: " + containerId);
+            String containerId = selectedContainer.getId();
 
-                db.addChunkMetaData(chunkName, fileId, containerId);
-                chunkNames.add(chunkName);
-        } else {
-            System.err.println("❌ No container available for chunk: " + chunkName);
-        }}
+            db.addChunkMetaData(chunkName, fileId, containerId);
+            chunkNames.add(chunkName);
+        }
         
         return chunkNames; 
     }

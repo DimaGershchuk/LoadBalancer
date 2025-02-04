@@ -1,22 +1,32 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
- */
-package com.mycompany.javafxapplication1;
+    /*
+     * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
+     * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
+     */
+    package com.mycompany.javafxapplication1;
 
-/**
- *
- * @author ntu-user
- */
-public class Response {
-    private String status;
-    private String message;
+    /**
+     *
+     * @author ntu-user
+     */
+    public class Response {
+        private String fileId;
+        private String status;
 
-    public String getStatus() { return status; }
-    public String getMessage() { return message; }
+        public Response(String fileId, String status) {
+            this.fileId = fileId;
+            this.status = status;
+        }
 
-    @Override
-    public String toString() {
-        return "Response{status='" + status + "', message='" + message + "'}";
+        public String getFileId() {
+            return fileId;
+        }
+
+        public String getStatus() {
+            return status;
+        }
+
+        @Override
+        public String toString() {
+            return "Response{fileId='" + fileId + "', status='" + status + "'}";
+        }
     }
-}

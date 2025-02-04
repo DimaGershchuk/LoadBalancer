@@ -32,7 +32,6 @@ public class MQTTClient {
         MqttConnectOptions options = new MqttConnectOptions();
         options.setCleanSession(true);
         client.connect(options);
-        System.out.println("Connected to MQTT broker at " + BROKER_URL);
     }
 
     // Send request to LoadBalancer
@@ -57,6 +56,22 @@ public class MQTTClient {
             System.out.println("Processing response: " + response);
         } catch (Exception e) {
             System.err.println("Failed to parse MQTT response: " + e.getMessage());
+        }
+    }
+    
+    public void subscribeToDeletionConfirmation(String fileId, Runnable onSuccess) {
+        try {
+            client.subscribe("load-balancer/file-operation/confirmation", (topic, message) -> {
+                String payload = new String(message.getPayload());
+                Gson gson = new Gson();
+                Response response = gson.fromJson(payload, Response.class);
+
+                if (response.getFileId().equals(fileId) && response.getStatus().equals("DELETED")) {
+                    onSuccess.run(); // Виконується видалення з бази після підтвердження
+                }
+            });
+        } catch (MqttException e) {
+            e.printStackTrace();
         }
     }
 

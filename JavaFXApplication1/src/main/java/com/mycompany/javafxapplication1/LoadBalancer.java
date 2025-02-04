@@ -157,10 +157,23 @@ public class LoadBalancer{
                     container.deleteChunk(chunk);
                 }
             }
-        System.out.println("File deletion completed: " + request.getFileId());
+            
+            sendDeletionConfirmation(request.getFileId());
         
-        } finally {
-            FileLockManager.unlockFile(request.getFileId()); 
+            } finally {
+                FileLockManager.unlockFile(request.getFileId()); 
+            }
+    }
+    
+    private void sendDeletionConfirmation(String fileId) {
+        try {
+            Gson gson = new Gson();
+            Response response = new Response(fileId,"DELETED");
+            MqttMessage message = new MqttMessage(gson.toJson(response).getBytes());
+            mqttClient.publish("load-balancer/file-operation/confirmation", message);
+            System.out.println("Deletion confirmation sent for fileId: " + fileId);
+        } catch (MqttException e) {
+            e.printStackTrace();
         }
     }
     
@@ -242,6 +255,7 @@ public class LoadBalancer{
             waitingQueue.add(request);
             System.out.println("Added to waiting queue: " + request.getId());
         }
+        showQueueStatus();
         processRequests();
     }
 
@@ -250,12 +264,16 @@ public class LoadBalancer{
             while (!waitingQueue.isEmpty() && processingQueue.size() < maxConcurrentRequests) {
                 Request request = waitingQueue.poll();
                 processingQueue.add(request);
-
-                if (request.getOperationType() == Request.OperationType.UPLOAD) {
-                    uploadFile(request); 
-                } else {
-                    distributeChunks(request); 
-                }
+                
+            showQueueStatus();
+                
+            if (request.getOperationType() == Request.OperationType.UPLOAD) {
+                uploadFile(request);
+            } else if (request.getOperationType() == Request.OperationType.DELETE) {
+                deleteChunks(request);
+            } else if (request.getOperationType() == Request.OperationType.DOWNLOAD) {
+                downloadChunks(request);
+            }
             }
         }
     }
@@ -265,6 +283,7 @@ public class LoadBalancer{
             processingQueue.remove(request);
             readyQueue.add(request);
             System.out.println("Request completed: " + request.getId());
+            showQueueStatus();
         }
     }
 
@@ -282,7 +301,7 @@ public class LoadBalancer{
     
     private void simulateDelay() {
         
-        int baseDelay = 30 + random.nextInt(61);
+        int baseDelay = 10 + random.nextInt(61);
         int adjustedDelay = (int) (baseDelay * trafficMultiplier);
         System.out.println("Simulated delay: " + adjustedDelay + " seconds (Traffic Level: " + trafficLevel + ")");
 
@@ -309,9 +328,12 @@ public class LoadBalancer{
             containers.add(new Container("container4", "soft40051-files-container4", 22, "ntu-user", "ntu-user"));
             
            
-            LoadBalancer loadBalancer = new LoadBalancer(containers, 2);
-            System.out.println("✅Load Balancer connect to MQTT borker!");
+            LoadBalancer loadBalancer = new LoadBalancer(containers, 5);
             
+            while (true) {
+            loadBalancer.showQueueStatus();
+            Thread.sleep(5000);  // Затримка на 5 секунд
+        }
 
         } catch (Exception e) {
             e.printStackTrace();

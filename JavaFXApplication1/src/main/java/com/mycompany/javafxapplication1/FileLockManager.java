@@ -4,6 +4,7 @@
  */
 package com.mycompany.javafxapplication1;
 
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
@@ -12,19 +13,30 @@ import java.util.concurrent.locks.ReentrantLock;
  */
 public class FileLockManager {
     
-    private static final ReentrantLock lock = new ReentrantLock();
+     private static final ConcurrentHashMap<String, ReentrantLock> fileLocks = new ConcurrentHashMap<>();
 
     public static void lockFile(String fileId) {
+        fileLocks.putIfAbsent(fileId, new ReentrantLock());
+        ReentrantLock lock = fileLocks.get(fileId);
+        
         System.out.println("Locking file: " + fileId);
         lock.lock();
     }
 
     public static void unlockFile(String fileId) {
-        System.out.println("Unlocking file: " + fileId);
-        lock.unlock();
+        ReentrantLock lock = fileLocks.get(fileId);
+        if (lock != null && lock.isHeldByCurrentThread()) {
+            lock.unlock();
+            System.out.println("Unlocking file: " + fileId);
+
+            if (!lock.isLocked()) {
+                fileLocks.remove(fileId);
+            }
+        }
     }
 
     public static boolean isFileLocked(String fileId) {
-        return lock.isLocked();
+        ReentrantLock lock = fileLocks.get(fileId);
+        return lock != null && lock.isLocked();
     }
 }
