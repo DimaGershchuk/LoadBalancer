@@ -16,7 +16,7 @@ public class MQTTClient {
     
      
     private static final String BROKER_URL = "tcp://mqtt-broker:1883"; 
-    private static final String CLIENT_ID = MqttClient.generateClientId();
+    private static final String CLIENT_ID = "Dima";
     private static final String TOPIC = "load-balancer/file-operation";
 
     private MqttClient client;
@@ -36,11 +36,20 @@ public class MQTTClient {
 
     // Send request to LoadBalancer
     public void sendRequest(Request request) throws MqttException {
-        String jsonRequest = gson.toJson(request);
-        MqttMessage message = new MqttMessage(jsonRequest.getBytes());
-        message.setQos(1);
-        client.publish(TOPIC, message);
-        System.out.println("Sent MQTT request: " + jsonRequest);
+        try {
+            if (!client.isConnected()) {
+                System.out.println("MQTT client disconnected, reconnecting...");
+                reconnect();
+            }
+            Gson gson = new Gson();
+            String jsonRequest = gson.toJson(request);
+            MqttMessage message = new MqttMessage(jsonRequest.getBytes());
+            client.publish("load-balancer/file-operation", message);
+            System.out.println("✅Sent MQTT request: " + jsonRequest);
+        } catch (MqttException e) {
+            e.printStackTrace();
+            System.err.println("❌Failed to send MQTT request: " + e.getMessage());
+        }
     }
 
     public void subscribe() throws MqttException {
@@ -81,4 +90,13 @@ public class MQTTClient {
             System.out.println("Disconnected from MQTT broker.");
         }
     }
+    
+    public void reconnect() {
+    try {
+        client.reconnect();
+        System.out.println("✅Reconnected to MQTT broker.");
+    } catch (MqttException e) {
+        System.err.println("❌Failed to reconnect to MQTT broker: " + e.getMessage());
+    }
+}
 }

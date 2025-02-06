@@ -83,7 +83,7 @@ public class Container {
             session.connect();
 
             session.disconnect();
-            System.out.println(id + " is healthy.");
+            //System.out.println(id + " is healthy.");
             return true;
             
         } catch (Exception e) {

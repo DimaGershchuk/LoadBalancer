@@ -7,6 +7,7 @@ package com.mycompany.javafxapplication1;
 import java.util.List;
 import java.util.UUID;
 import com.google.gson.Gson;
+import java.util.ArrayList;
 
 public class Request {
     
@@ -22,8 +23,9 @@ public class Request {
     private final long timestamp;
     private List<String> chunks;
     private Status status;
+    private final String filePath;
 
-    public Request(int userId, String fileId, OperationType operationType, long fileSize, int priority, List<String> chunks) {
+    public Request(int userId, String fileId, OperationType operationType, long fileSize, int priority, List<String> chunks, String filePath) {
         this.requestId = UUID.randomUUID().toString();
         this.userId = userId;
         this.fileId = fileId;
@@ -31,8 +33,9 @@ public class Request {
         this.fileSize = fileSize;
         this.priority = priority;
         this.timestamp = System.currentTimeMillis();
-        this.chunks = chunks;
+        this.chunks = (chunks == null) ? new ArrayList<>() : chunks;
         this.status = Status.PENDING;
+        this.filePath = filePath;
     }
 
    public String getId() {
@@ -57,5 +60,15 @@ public class Request {
 
     public String toJson() {
         return new Gson().toJson(this);
-}
+    }
+    
+    public String getFilePath() {
+        return filePath;
+    }
+    
+      public int getPriority() {
+        return priority;
+    }
+    
+    
 }

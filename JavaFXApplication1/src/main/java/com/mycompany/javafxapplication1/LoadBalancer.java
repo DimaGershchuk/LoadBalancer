@@ -8,27 +8,41 @@ import java.io.*;
 import java.nio.file.Files;
 import org.eclipse.paho.client.mqttv3.*;
 import com.mycompany.javafxapplication1.Container;
+import java.sql.SQLException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+
 
 
 public class LoadBalancer{
     
     private final List<Container> containers;
-    private final Queue<Request> waitingQueue;
-    private final Queue<Request> processingQueue;
-    private final Queue<Request> readyQueue;
+    private final Queue<Task> waitingQueue;
+    private final Queue<Task> processingQueue;
+    private final Queue<Task> readyQueue;
     private final Random random;
     private final int maxConcurrentRequests;
     private int roundRobinIndex = 0;
     private DB db;
     
     private MqttClient mqttClient;
+    private FileChunking fileChunking;
     
-
+    public Thread processingThread;
+    private volatile boolean running = true;
+    
     public enum TrafficLevel { LOW, MEDIUM, HIGH }
     
     private TrafficLevel trafficLevel = TrafficLevel.LOW;
     
-    private double trafficMultiplier = 1.0;  
+    private double trafficMultiplier = 1.0;
+    
+     public enum SchedulingAlgorithm {
+        FCFS, SJN, PRIORITY
+    }
+     
+    private SchedulingAlgorithm schedulingAlgorithm = SchedulingAlgorithm.FCFS;
 
     public LoadBalancer(List<Container> containers, int maxConcurrentRequests) {
         
@@ -39,6 +53,9 @@ public class LoadBalancer{
         this.random = new Random();
         this.maxConcurrentRequests = maxConcurrentRequests;
         this.db = new DB();
+        this.fileChunking = new FileChunking(this);
+        
+        
 
         try {
             mqttClient = new MqttClient("tcp://mqtt-broker:1883", MqttClient.generateClientId());
@@ -52,6 +69,36 @@ public class LoadBalancer{
         } catch (MqttException e) {
             e.printStackTrace();
         }
+        
+        processingThread = new Thread(() -> {
+            while (running) {
+                try {
+                    processRequests();
+
+                    Thread.sleep(15000);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+        processingThread.setDaemon(true); 
+        processingThread.start();
+    
+    }
+    
+    
+    
+    public void shutdown() {
+        running = false;
+        if (processingThread != null) {
+            processingThread.interrupt();
+        }
+        try {
+            mqttClient.disconnect();
+        } catch (MqttException e) {
+            e.printStackTrace();
+        }
+        System.out.println("Load Balancer shutdown.");
     }
     
     private List<Container> getHealthyContainers() {
@@ -87,26 +134,15 @@ public class LoadBalancer{
         }
     }
 
-    private void handleMqttMessage(String topic, MqttMessage message) throws JSchException, IOException, SftpException {
+    private void handleMqttMessage(String topic, MqttMessage message) throws JSchException, IOException, SftpException, SQLException, ClassNotFoundException {
+        
         String payload = new String(message.getPayload());
         System.out.println("Received MQTT message: " + payload);
 
         Gson gson = new Gson();
         Request request = gson.fromJson(payload, Request.class);
 
-        switch (request.getOperationType()) {
-            case UPLOAD:
-                uploadFile(request);
-                break;
-            case DELETE:
-                deleteChunks(request);
-                break;
-            case DOWNLOAD:
-                downloadChunks(request);
-                break;
-            default:
-                System.out.println("Unknown operation type: " + request.getOperationType());
-        }
+        addRequest(request);
     }
     
     public Container selectContainerForChunk(String chunkId) {
@@ -123,47 +159,89 @@ public class LoadBalancer{
     }
     
     private void uploadFile(Request request) {
+        
         if (FileLockManager.isFileLocked(request.getFileId())) {
-            System.out.println("File is currently being processed. Waiting to upload: " + request.getFileId());
-            return;
+        System.out.println("File is currently being processed. Waiting to upload: " + request.getFileId());
+        return;
         }
-
-        FileLockManager.lockFile(request.getFileId()); 
+        FileLockManager.lockFile(request.getFileId());
 
         try {
             System.out.println("Uploading file: " + request.getFileId());
-            distributeChunks(request);  
+            System.out.println("File path for chunking: " + request.getFilePath());
+            System.out.println("Calling chunkFile for: " + request.getFileId());
+            
+            List<String> existingChunks = db.getChunksForFile(request.getFileId());
+            
+            if (!existingChunks.isEmpty()) {
+                System.out.println("Chunks already exist for file: " + request.getFileId());
+                request.getChunks().addAll(existingChunks); 
+            } else {
+                List<String> chunks = fileChunking.chunkFile(
+                    new File(request.getFilePath()),
+                    "chunks/",
+                    4,
+                    request.getFileId()
+                );
+                System.out.println("Chunks before adding to request: " + chunks.size());
+                request.getChunks().addAll(chunks);
+                System.out.println("Chunks after adding to request: " + request.getChunks().size());
+            }
+            distributeChunks(request);
+
             System.out.println("File upload completed: " + request.getFileId());
         } catch (Exception e) {
             System.err.println("Error during upload of file: " + request.getFileId());
             e.printStackTrace();
         } finally {
-            FileLockManager.unlockFile(request.getFileId());  
+            FileLockManager.unlockFile(request.getFileId());
         }
     }
     
-    private void deleteChunks(Request request) {
-        
+     private void distributeChunks(Request request) throws JSchException, IOException, SftpException {
+        List<String> chunks = request.getChunks();
+        for (String chunk : chunks) {
+            Container selectedContainer = selectContainerForChunk(chunk);
+            if (selectedContainer != null) {
+                simulateDelay(); 
+                selectedContainer.sendFileToContainer(chunk);
+         
+            }
+        }
+    }
+       
+           
+    
+    private void deleteChunks(Request request) throws SQLException, ClassNotFoundException {
         if (FileLockManager.isFileLocked(request.getFileId())) {
             System.out.println("File is currently in use. Waiting to delete: " + request.getFileId());
             return;
         }
 
         FileLockManager.lockFile(request.getFileId());
+
         try {
-            for (String chunk : request.getChunks()) {
+            List<String> chunksToDelete = new ArrayList<>(request.getChunks());
+
+            for (String chunk : chunksToDelete) {
                 Container container = selectContainerForChunk(chunk);
                 if (container != null) {
                     container.deleteChunk(chunk);
+                    System.out.println("Deleted chunk " + chunk + " from " + container.getId());
+                } else {
+                    System.err.println("Container not found for chunk: " + chunk);
                 }
             }
-            
+
+            // Тепер видаляємо з бази після видалення з контейнерів
+            db.deleteChunksFromDb(request.getFileId());
+
             sendDeletionConfirmation(request.getFileId());
-        
-            } finally {
-                FileLockManager.unlockFile(request.getFileId()); 
-            }
-    }
+
+        } finally {
+            FileLockManager.unlockFile(request.getFileId());
+        }
+}
     
     private void sendDeletionConfirmation(String fileId) {
         try {
@@ -218,79 +296,97 @@ public class LoadBalancer{
             e.printStackTrace();
     }}
     
-        private void distributeChunks(Request request) throws JSchException, IOException, SftpException {
-        List<String> chunks = request.getChunks();
-        for (String chunk : chunks) {
-            Container selectedContainer = selectContainerForChunk(chunk);
-            if (selectedContainer != null) {
-                simulateDelay(); 
-                selectedContainer.sendFileToContainer(chunk);
-         
-            }
-        }
-        finalizeRequest(request);
-    }
-    
-    /*private void updateFile(Request request) throws JSchException, IOException, SftpException {
-    
-         if (FileLockManager.isFileLocked(request.getFileId())) {
-            System.out.println("File is currently in use. Waiting to delete: " + request.getFileId());
-            return;
-        }
+       
 
-        FileLockManager.lockFile(request.getFileId());
-    
-        System.out.println("Updating file: " + request.getId());
-
-        deleteChunks(request);
-
-        distributeChunks(request);
-
-        System.out.println("File " + request.getId() + " successfully updated.");
-    }*/
-
-
-    public void addRequest(Request request) throws JSchException, IOException, SftpException{
+    public void addRequest(Request request) throws JSchException, IOException, SftpException, SQLException, ClassNotFoundException{
         synchronized (waitingQueue) {
-            waitingQueue.add(request);
-            System.out.println("Added to waiting queue: " + request.getId());
+        long delay = simulateDelay();
+        Task task = new Task(request, delay);
+        waitingQueue.offer(task);
+        System.out.println("Added task with delay " + delay + " ms for file " + request.getFileId());
         }
-        showQueueStatus();
-        processRequests();
+
+    }
+    
+     private void processRequests() throws JSchException, IOException, SftpException, SQLException, ClassNotFoundException {
+           synchronized (waitingQueue) {
+            
+           while(!waitingQueue.isEmpty() && processingQueue.size() < maxConcurrentRequests){
+               Task task = waitingQueue.peek();
+                if(task.isReady()){
+                    waitingQueue.poll();
+                    processingQueue.offer(task);
+                    executeTask(task);
+                } else {
+                    break;
+                }
+           }
+           
+        }
+           showQueueStatus();
+     }
+     
+      private Task selectNextTask() {
+        List<Task> readyTasks = new ArrayList<>();
+        for (Task t : waitingQueue) {
+            if (t.isReady()) {
+                readyTasks.add(t);
+            }
+        }
+        if (readyTasks.isEmpty()) {
+            return null;
+        }
+        switch (schedulingAlgorithm) {
+            case FCFS:
+                for (Task t : waitingQueue) {
+                    if (t.isReady()) {
+                        return t;
+                    }
+                }
+                break;
+            /*case SJN:
+                return readyTasks.stream()
+                        .min(Comparator.comparingLong(t -> t.getRequest().getProcessingTime()))
+                        .orElse(null);*/
+            case PRIORITY:
+                return readyTasks.stream()
+                        .min(Comparator.comparingInt(t -> t.getRequest().getPriority()))
+                        .orElse(null);
+            default:
+                return null;
+        }
+        return null;
     }
 
-    private void processRequests() throws JSchException, IOException, SftpException {
-         synchronized (waitingQueue) {
-            while (!waitingQueue.isEmpty() && processingQueue.size() < maxConcurrentRequests) {
-                Request request = waitingQueue.poll();
-                processingQueue.add(request);
-                
-            showQueueStatus();
-                
-            if (request.getOperationType() == Request.OperationType.UPLOAD) {
-                uploadFile(request);
-            } else if (request.getOperationType() == Request.OperationType.DELETE) {
-                deleteChunks(request);
-            } else if (request.getOperationType() == Request.OperationType.DOWNLOAD) {
-                downloadChunks(request);
-            }
-            }
-        }
-    }
-
-    private void finalizeRequest(Request request) {
+    private void finalizeRequest(Task task) {
         synchronized (processingQueue) {
-            processingQueue.remove(request);
-            readyQueue.add(request);
-            System.out.println("Request completed: " + request.getId());
-            showQueueStatus();
+            if (processingQueue.remove(task)) {
+                readyQueue.offer(task);
+                System.out.println("Request completed: " + task.getRequest().getFileId());
+            }
         }
+    }
+    
+    private void executeTask(Task task) throws JSchException, IOException, SftpException, SQLException, ClassNotFoundException {
+        Request request = task.getRequest();
+        switch (request.getOperationType()) {
+            case UPLOAD:
+                uploadFile(request);
+                break;
+            case DELETE:
+                deleteChunks(request);
+                break;
+            case DOWNLOAD:
+                downloadChunks(request);
+                break;
+        }
+        finalizeRequest(task);
     }
 
     public Container roundRobin() {
         List<Container> healthyContainers = getHealthyContainers();
         if (healthyContainers.isEmpty()) {
-            System.out.println("❌No healthy containers available.");
+            System.out.println("No healthy containers available.");
             return null;
         }
         Container selectedContainer = healthyContainers.get(roundRobinIndex % healthyContainers.size());
@@ -299,17 +395,12 @@ public class LoadBalancer{
     }
 
     
-    private void simulateDelay() {
-        
-        int baseDelay = 10 + random.nextInt(61);
+    private long simulateDelay() {
+        int baseDelay = 30 + random.nextInt(31);
         int adjustedDelay = (int) (baseDelay * trafficMultiplier);
         System.out.println("Simulated delay: " + adjustedDelay + " seconds (Traffic Level: " + trafficLevel + ")");
 
-        try {
-            Thread.sleep(adjustedDelay * 1000);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        return adjustedDelay * 1000L;
     }
 
     public void showQueueStatus() {
@@ -326,20 +417,12 @@ public class LoadBalancer{
             containers.add(new Container("container2", "soft40051-files-container2", 22, "ntu-user", "ntu-user"));
             containers.add(new Container("container3", "soft40051-files-container3", 22, "ntu-user", "ntu-user"));
             containers.add(new Container("container4", "soft40051-files-container4", 22, "ntu-user", "ntu-user"));
-            
-           
+
             LoadBalancer loadBalancer = new LoadBalancer(containers, 5);
             
-            while (true) {
-            loadBalancer.showQueueStatus();
-            Thread.sleep(5000);  // Затримка на 5 секунд
-        }
-
         } catch (Exception e) {
             e.printStackTrace();
         }
-        
-        
     }
     
 }

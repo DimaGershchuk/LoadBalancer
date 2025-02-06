@@ -355,39 +355,54 @@ public class DB {
     
     public String addFileToUser(String filename, long fileLength, int crc32, String filePath, int userId) throws ClassNotFoundException, SQLException{
         
-    String insertFileQuery = "INSERT INTO files (file_id, filename, file_length, crc32, file_path) VALUES (?, ?, ?, ?, ?)";
-    String insertAclQuery = "INSERT INTO acl (file_id, user_id, can_read, can_write) VALUES (?, ?, 1, 1)";
-    
-    String generatedFileId = java.util.UUID.randomUUID().toString(); // Генерація унікального ID для file_id
+        String checkFileQuery = "SELECT file_id FROM files WHERE filename = ? AND file_path = ?";
+        String insertFileQuery = "INSERT INTO files (file_id, filename, file_length, crc32, file_path) VALUES (?, ?, ?, ?, ?)";
+        String insertAclQuery = "INSERT INTO acl (file_id, user_id, can_read, can_write) VALUES (?, ?, 1, 1)";
 
-    try {
-      
-        if (connection == null) {
-            connection = initConnection();
+        String generatedFileId = java.util.UUID.randomUUID().toString(); 
+
+        try {
+            if (connection == null) {
+                connection = initConnection();
+            }
+
+            // 1. Перевірка, чи файл вже існує
+            try (PreparedStatement checkStmt = connection.prepareStatement(checkFileQuery)) {
+                checkStmt.setString(1, filename);
+                checkStmt.setString(2, filePath);
+
+                ResultSet resultSet = checkStmt.executeQuery();
+                if (resultSet.next()) {
+                    String existingFileId = resultSet.getString("file_id");
+                    System.out.println("File already exists with file_id: " + existingFileId);
+                    return existingFileId; // Повертаємо існуючий file_id
                 }
+            }
 
-        try(PreparedStatement fileStmt = connection.prepareStatement(insertFileQuery)){
-        
+            // 2. Якщо файл не існує, додаємо новий запис
+            try (PreparedStatement fileStmt = connection.prepareStatement(insertFileQuery)) {
+                fileStmt.setString(1, generatedFileId);
+                fileStmt.setString(2, filename);
+                fileStmt.setLong(3, fileLength);
+                fileStmt.setInt(4, crc32);
+                fileStmt.setString(5, filePath);
+                fileStmt.executeUpdate();
+            }
 
-        fileStmt.setString(1, generatedFileId);
-        fileStmt.setString(2, filename);
-        fileStmt.setLong(3, fileLength);
-        fileStmt.setInt(4, crc32);
-        fileStmt.setString(5, filePath);
-        fileStmt.executeUpdate();
+            // 3. Додаємо права доступу до ACL
+            try (PreparedStatement aclStmt = connection.prepareStatement(insertAclQuery)) {
+                aclStmt.setString(1, generatedFileId);
+                aclStmt.setInt(2, userId);
+                aclStmt.executeUpdate();
+            }
 
-        try(PreparedStatement aclStmt = connection.prepareStatement(insertAclQuery)){
-        aclStmt.setString(1, generatedFileId);
-        aclStmt.setInt(2, userId);
-        aclStmt.executeUpdate();
+            System.out.println("New file added with file_id: " + generatedFileId);
+            return generatedFileId; // Повертаємо новий file_id, якщо файл не існував
 
-        return generatedFileId; 
+        } catch (SQLException e) {
+            e.printStackTrace();
+            throw e;
         }
-        }
-    } catch (SQLException e) {
-        e.printStackTrace();
-        throw e;
-    }
     } 
     
     public void updateFileForUser(String fileID, String newFileName, long newFileLenght, String newCrc32, String newFilePath) throws ClassNotFoundException, SQLException{
@@ -576,6 +591,33 @@ public class DB {
                 }
             return chunks;
         }
+    
+    public List<String> deleteChunksFromDb(String fileId) throws SQLException, ClassNotFoundException {
+        List<String> chunks = new ArrayList<>();
+        String selectQuery = "SELECT chunk_id FROM chunks WHERE file_id = ?";
+        String deleteQuery = "DELETE FROM chunks WHERE file_id = ?";
+
+        if (connection == null) {
+            connection = initConnection();
+        }
+
+        try (PreparedStatement selectStmt = connection.prepareStatement(selectQuery)) {
+            selectStmt.setString(1, fileId);
+            try (ResultSet rs = selectStmt.executeQuery()) {
+                while (rs.next()) {
+                    chunks.add(rs.getString("chunk_id"));
+                }
+            }
+        }
+
+        try (PreparedStatement deleteStmt = connection.prepareStatement(deleteQuery)) {
+            deleteStmt.setString(1, fileId);
+            deleteStmt.executeUpdate();  // Виконання DELETE
+        }
+
+        return chunks;  // Повертаємо список видалених chunk_id
+    }
+    
     }
 
 

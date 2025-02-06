@@ -22,6 +22,7 @@ import java.util.Scanner;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.zip.CRC32;
+import javafx.application.Platform;
 import javafx.collections.ObservableList;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
@@ -121,18 +122,7 @@ public class FileselectionController {
     private Container container3;
     private Container container4;
     
-    @FXML
-            
-    List<Container> containers = Arrays.asList(
-        new Container("container1", "soft40051-files-container1", 22, "ntu-user", "ntu-user"),
-        new Container("container2", "soft40051-files-container2", 22, "ntu-user", "ntu-user"),
-        new Container("container3", "soft40051-files-container3", 22, "ntu-user", "ntu-user"),
-        new Container("container4", "soft40051-files-container4", 22, "ntu-user", "ntu-user")
-    );
-
-    LoadBalancer loadBalancer = new LoadBalancer(containers, 2);
-    
-    FileChunking fileChunking = new FileChunking(loadBalancer);
+ 
 
     public FileselectionController() throws MqttException {  
         this.mqttClient = new MQTTClient();
@@ -182,10 +172,8 @@ public class FileselectionController {
             DB db = new DB();
             String fileId = db.addFileToUser(filename, fileLength, crc32, filePath,  this.userId);
             
-            
-            List<String> chunks = fileChunking.chunkFile(selectedFile, "chunks/", 4, fileId);
-            
-            Request request = new Request(userId, fileId, Request.OperationType.UPLOAD, fileLength, 1, chunks);
+            Request request = new Request(userId, fileId, Request.OperationType.UPLOAD, fileLength, 1, new ArrayList<>(), filePath);
+            System.out.println("Sending MQTT request for file: " + fileId);
             mqttClient.sendRequest(request);
             
             fileTableView.getItems().add(new FileModel(fileId, filename, fileLength, crc32, filePath));
@@ -240,9 +228,8 @@ public class FileselectionController {
                     String filePath = newFile.getAbsolutePath();
                     String fileId = db.addFileToUser(fileName, fileLength, crc32, filePath, this.userId);
 
-                    List<String> chunks = fileChunking.chunkFile(selectedFile, "chunks/", 4, fileId);
             
-                    Request request = new Request(userId, fileId, Request.OperationType.UPLOAD, fileLength, 1, chunks);
+                    Request request = new Request(userId, fileId, Request.OperationType.UPLOAD, fileLength, 1, new ArrayList<>(), filePath);
                     mqttClient.sendRequest(request);
 
                     FileModel newFileModel = new FileModel(fileId, fileName, fileLength, crc32, filePath);
@@ -348,21 +335,23 @@ public class FileselectionController {
                 Files.deleteIfExists(filePath);
 
                 List<String> chunks = db.getChunksForFile(selectedFile.getFileId());
-                
-                Request deleteRequest = new Request(userId, selectedFile.getFileId(), Request.OperationType.DELETE, 0, 1, chunks);
+                Request deleteRequest = new Request(userId, selectedFile.getFileId(), Request.OperationType.DELETE, 0, 2, chunks, selectedFile.getFilePath());
                 mqttClient.sendRequest(deleteRequest);
                 
                 mqttClient.subscribeToDeletionConfirmation(selectedFile.getFileId(), () -> {
                     try {
+                        
+                        System.out.println("✅Deleting file from DB after chunk deletion: " + selectedFile.getFileId());
                         db.deleteFileForUser(selectedFile.getFileId(), this.userId);
-                        fileTableView.getItems().remove(selectedFile);
+                        
+                        Platform.runLater(() -> fileTableView.getItems().remove(selectedFile));
+                        
                         showAlert("Success", "File and its chunks deleted successfully!", Alert.AlertType.INFORMATION);
+                        
                     } catch (ClassNotFoundException ex) {
                         Logger.getLogger(FileselectionController.class.getName()).log(Level.SEVERE, null, ex);
                     }
                 });
-
-                fileTableView.getItems().remove(selectedFile);
 
                 showAlert("Success", "File deleted successfully!", Alert.AlertType.INFORMATION);
             } catch (IOException e) {
@@ -419,7 +408,7 @@ public class FileselectionController {
 
                 List<String> chunks = db.getChunksForFile(selectedFile.getFileId());
 
-                Request request = new Request(userId, selectedFile.getFileId(), Request.OperationType.DOWNLOAD, selectedFile.getFileLength(), 1, chunks);
+                Request request = new Request(userId, selectedFile.getFileId(), Request.OperationType.DOWNLOAD, selectedFile.getFileLength(), 1, null, selectedFile.getFilePath());
 
                 mqttClient.sendRequest(request);
 

@@ -27,6 +27,8 @@ public class FileChunking {
 
         public List<String> chunkFile(File inputFile, String outputDir, int numberChunks, String fileId) throws NoSuchAlgorithmException, FileNotFoundException, IOException, ClassNotFoundException, Exception {
         
+        List<String> chunkNames = new ArrayList<>();
+        
         KeyGenerator keyGen = KeyGenerator.getInstance("AES");
         keyGen.init(256);
         SecretKey secretKey = keyGen.generateKey();
@@ -44,7 +46,7 @@ public class FileChunking {
             dir.mkdir();
         }
         
-        List<String> chunkNames = new ArrayList<>();  // Список для збереження імен чанків
+          // Список для збереження імен чанків
         
         for (int i = 0; i < numberChunks; i++) {
             int start = i * chunkSize;
@@ -62,11 +64,13 @@ public class FileChunking {
 
             Container selectedContainer = loadBalancer.roundRobin();
             String containerId = selectedContainer.getId();
-
+            
+            System.out.println("Adding chunk to DB: " + chunkName);
             db.addChunkMetaData(chunkName, fileId, containerId);
+            
             chunkNames.add(chunkName);
         }
-        
+        System.out.println("Completed chunking for file: " + fileId);
         return chunkNames; 
     }
 
