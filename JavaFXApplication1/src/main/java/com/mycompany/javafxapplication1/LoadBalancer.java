@@ -9,6 +9,7 @@ import java.nio.file.Files;
 import org.eclipse.paho.client.mqttv3.*;
 import com.mycompany.javafxapplication1.Container;
 import java.sql.SQLException;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -41,6 +42,8 @@ public class LoadBalancer{
      public enum SchedulingAlgorithm {
         FCFS, SJN, PRIORITY
     }
+     
+    private static final ConcurrentHashMap<String, Boolean> fileOperationInProgress = new ConcurrentHashMap<>();
      
     private SchedulingAlgorithm schedulingAlgorithm = SchedulingAlgorithm.FCFS;
 
@@ -75,7 +78,7 @@ public class LoadBalancer{
                 try {
                     processRequests();
 
-                    Thread.sleep(15000);
+                    Thread.sleep(20000);
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -164,6 +167,8 @@ public class LoadBalancer{
         System.out.println("File is currently being processed. Waiting to upload: " + request.getFileId());
         return;
         }
+        
+        fileOperationInProgress.put(request.getFileId(), true);
         FileLockManager.lockFile(request.getFileId());
 
         try {
@@ -195,21 +200,10 @@ public class LoadBalancer{
             e.printStackTrace();
         } finally {
             FileLockManager.unlockFile(request.getFileId());
+            fileOperationInProgress.remove(request.getFileId());
         }
     }
-    
-     private void distributeChunks(Request request) throws JSchException, IOException, SftpException {
-        List<String> chunks = request.getChunks();
-        for (String chunk : chunks) {
-            Container selectedContainer = selectContainerForChunk(chunk);
-            if (selectedContainer != null) {
-                simulateDelay(); 
-                selectedContainer.sendFileToContainer(chunk);
-         
-            }
-        }
-    }
-       
+        
            
     
     private void deleteChunks(Request request) throws SQLException, ClassNotFoundException {
@@ -217,7 +211,8 @@ public class LoadBalancer{
             System.out.println("File is currently in use. Waiting to delete: " + request.getFileId());
             return;
         }
-
+        
+        fileOperationInProgress.put(request.getFileId(), true);
         FileLockManager.lockFile(request.getFileId());
 
         try {
@@ -240,18 +235,7 @@ public class LoadBalancer{
 
         } finally {
             FileLockManager.unlockFile(request.getFileId());
-        }
-}
-    
-    private void sendDeletionConfirmation(String fileId) {
-        try {
-            Gson gson = new Gson();
-            Response response = new Response(fileId,"DELETED");
-            MqttMessage message = new MqttMessage(gson.toJson(response).getBytes());
-            mqttClient.publish("load-balancer/file-operation/confirmation", message);
-            System.out.println("Deletion confirmation sent for fileId: " + fileId);
-        } catch (MqttException e) {
-            e.printStackTrace();
+            fileOperationInProgress.remove(request.getFileId());
         }
     }
     
@@ -281,6 +265,32 @@ public class LoadBalancer{
         }
         
     }
+    
+    private void distributeChunks(Request request) throws JSchException, IOException, SftpException {
+        List<String> chunks = request.getChunks();
+        for (String chunk : chunks) {
+            Container selectedContainer = selectContainerForChunk(chunk);
+            if (selectedContainer != null) {
+                simulateDelay(); 
+                selectedContainer.sendFileToContainer(chunk);
+         
+            }
+        }
+    }
+    
+    private void sendDeletionConfirmation(String fileId) {
+        try {
+            Gson gson = new Gson();
+            Response response = new Response(fileId,"DELETED");
+            MqttMessage message = new MqttMessage(gson.toJson(response).getBytes());
+            mqttClient.publish("load-balancer/file-operation/confirmation", message);
+            System.out.println("Deletion confirmation sent for fileId: " + fileId);
+        } catch (MqttException e) {
+            e.printStackTrace();
+        }
+    }
+    
+    
         
 
     public void combineChunks(List<String> chunks, String fileId) throws FileNotFoundException, IOException{
@@ -299,56 +309,87 @@ public class LoadBalancer{
        
 
     public void addRequest(Request request) throws JSchException, IOException, SftpException, SQLException, ClassNotFoundException{
+           if (fileOperationInProgress.getOrDefault(request.getFileId(), false)) {
+                System.out.println("Operation already in progress for file: " + request.getFileId() + ". Request added to waitingQueue.");
+            }
+           
         synchronized (waitingQueue) {
-        long delay = simulateDelay();
-        Task task = new Task(request, delay);
-        waitingQueue.offer(task);
-        System.out.println("Added task with delay " + delay + " ms for file " + request.getFileId());
+            long delay = simulateDelay();
+            Task task = new Task(request, delay);
+            waitingQueue.offer(task);
+            System.out.println("Added task with delay " + delay + " ms for file " + request.getFileId());
         }
 
     }
     
      private void processRequests() throws JSchException, IOException, SftpException, SQLException, ClassNotFoundException {
            synchronized (waitingQueue) {
-            
-           while(!waitingQueue.isEmpty() && processingQueue.size() < maxConcurrentRequests){
-               Task task = waitingQueue.peek();
-                if(task.isReady()){
-                    waitingQueue.poll();
+            while (!waitingQueue.isEmpty() && processingQueue.size() < maxConcurrentRequests) {
+                Task task = selectNextTask();
+                if (task == null) {
+                    // Немає готових завдань, виходимо з циклу
+                    break;
+                }
+                if (task.isReady()) {
+                    // Видаляємо завдання з waitingQueue (краще використовувати remove(task), оскільки selectNextTask() може повертати не перший елемент)
+                    waitingQueue.remove(task);
                     processingQueue.offer(task);
                     executeTask(task);
                 } else {
                     break;
                 }
-           }
-           
+            }
         }
-           showQueueStatus();
+        showQueueStatus();
      }
      
+     private void adjustSchedulingAlgorithm() {
+
+        List<Task> currentTasks = new ArrayList<>(waitingQueue);
+        ShedulerModule simulator = new ShedulerModule(currentTasks, containers.size());
+
+        long fcfsTime = simulator.simulateFCFS();
+        long sjfTime = simulator.simulateSJF();
+
+        // Вибираємо алгоритм з меншим загальним часом обробки
+        if (sjfTime < fcfsTime) {
+            schedulingAlgorithm = SchedulingAlgorithm.SJN;
+            System.out.println("Adjusted scheduling algorithm to SJN (Total time: " + sjfTime + "s vs FCFS: " + fcfsTime + "s).");
+        } else {
+            schedulingAlgorithm = SchedulingAlgorithm.FCFS;
+            System.out.println("Adjusted scheduling algorithm to FCFS (Total time: " + fcfsTime + "s vs SJN: " + sjfTime + "s).");
+        }
+    }
+     
       private Task selectNextTask() {
+         adjustSchedulingAlgorithm();
+    
         List<Task> readyTasks = new ArrayList<>();
         for (Task t : waitingQueue) {
-            if (t.isReady()) {
+            if (t != null && t.isReady()) {
                 readyTasks.add(t);
             }
         }
         if (readyTasks.isEmpty()) {
             return null;
         }
+
         switch (schedulingAlgorithm) {
             case FCFS:
+                // Повертаємо перше готове завдання у waitingQueue
                 for (Task t : waitingQueue) {
-                    if (t.isReady()) {
+                    if (t != null && t.isReady()) {
                         return t;
                     }
                 }
                 break;
-            /*case SJN:
+            case SJN:
+                // Обираємо завдання з найменшим часом обробки (delay)
                 return readyTasks.stream()
-                        .min(Comparator.comparingLong(t -> t.getRequest().getProcessingTime()))
-                        .orElse(null);*/
+                        .min(Comparator.comparingLong(t -> t.getDelay()))
+                        .orElse(null);
             case PRIORITY:
+                // Якщо потрібен PRIORITY scheduling, використовуйте priority з Request
                 return readyTasks.stream()
                         .min(Comparator.comparingInt(t -> t.getRequest().getPriority()))
                         .orElse(null);
@@ -396,7 +437,8 @@ public class LoadBalancer{
 
     
     private long simulateDelay() {
-        int baseDelay = 30 + random.nextInt(31);
+        int baseDelay = (30 + random.nextInt(61)) / 4;
+        
         int adjustedDelay = (int) (baseDelay * trafficMultiplier);
         System.out.println("Simulated delay: " + adjustedDelay + " seconds (Traffic Level: " + trafficLevel + ")");
 

@@ -1,6 +1,7 @@
 com/mycompany/javafxapplication1/Container.class
 com/mycompany/javafxapplication1/Request$OperationType.class
 com/mycompany/javafxapplication1/FileChunking.class
+com/mycompany/javafxapplication1/ShedulerModule.class
 com/mycompany/javafxapplication1/SessionManager.class
 com/mycompany/javafxapplication1/SSHClient.class
 com/mycompany/javafxapplication1/CreateFileDialogController.class

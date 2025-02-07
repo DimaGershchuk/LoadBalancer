@@ -335,7 +335,7 @@ public class FileselectionController {
                 Files.deleteIfExists(filePath);
 
                 List<String> chunks = db.getChunksForFile(selectedFile.getFileId());
-                Request deleteRequest = new Request(userId, selectedFile.getFileId(), Request.OperationType.DELETE, 0, 2, chunks, selectedFile.getFilePath());
+                Request deleteRequest = new Request(userId, selectedFile.getFileId(), Request.OperationType.DELETE, 0, 3, chunks, selectedFile.getFilePath());
                 mqttClient.sendRequest(deleteRequest);
                 
                 mqttClient.subscribeToDeletionConfirmation(selectedFile.getFileId(), () -> {
@@ -408,7 +408,7 @@ public class FileselectionController {
 
                 List<String> chunks = db.getChunksForFile(selectedFile.getFileId());
 
-                Request request = new Request(userId, selectedFile.getFileId(), Request.OperationType.DOWNLOAD, selectedFile.getFileLength(), 1, null, selectedFile.getFilePath());
+                Request request = new Request(userId, selectedFile.getFileId(), Request.OperationType.DOWNLOAD, selectedFile.getFileLength(), 2, null, selectedFile.getFilePath());
 
                 mqttClient.sendRequest(request);
 

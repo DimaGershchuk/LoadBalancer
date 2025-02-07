@@ -31,6 +31,10 @@ public class Task {
     public long getDelay() {
         return delay;
     }
+    
+    public String getName() {
+        return request.getFileId();  
+    }
 
     public boolean isReady() {
         return System.currentTimeMillis() >= startTime + delay;
