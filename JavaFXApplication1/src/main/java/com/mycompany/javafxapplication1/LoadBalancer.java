@@ -43,7 +43,8 @@ public class LoadBalancer{
         FCFS, SJN, PRIORITY
     }
      
-    private static final ConcurrentHashMap<String, Boolean> fileOperationInProgress = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, Request.Status> fileOperationStatus = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, Long> fileOperationEndTime = new ConcurrentHashMap<>();
      
     private SchedulingAlgorithm schedulingAlgorithm = SchedulingAlgorithm.FCFS;
 
@@ -78,7 +79,7 @@ public class LoadBalancer{
                 try {
                     processRequests();
 
-                    Thread.sleep(20000);
+                    Thread.sleep(25000);
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -164,23 +165,29 @@ public class LoadBalancer{
     private void uploadFile(Request request) {
         
         if (FileLockManager.isFileLocked(request.getFileId())) {
-        System.out.println("File is currently being processed. Waiting to upload: " + request.getFileId());
-        return;
+            System.out.println("File is currently being processed. Waiting to upload: " + request.getFileId());
+            return;
         }
-        
-        fileOperationInProgress.put(request.getFileId(), true);
+    // Перевіряємо, чи вже існує операція для цього файлу, що не завершилася успішно.
+        Request.Status currentStatus = fileOperationStatus.get(request.getFileId());
+        if (currentStatus != null && currentStatus != Request.Status.COMPLETED) {
+            System.out.println("Previous operation for file " + request.getFileId() + " is still in progress or failed. Aborting upload.");
+            return;
+        }
+
+        // Встановлюємо статус операції в IN_PROGRESS
+        fileOperationStatus.put(request.getFileId(), Request.Status.IN_PROGRESS);
         FileLockManager.lockFile(request.getFileId());
+        request.setStatus(Request.Status.IN_PROGRESS);
 
         try {
             System.out.println("Uploading file: " + request.getFileId());
-            System.out.println("File path for chunking: " + request.getFilePath());
-            System.out.println("Calling chunkFile for: " + request.getFileId());
-            
+
+
             List<String> existingChunks = db.getChunksForFile(request.getFileId());
-            
             if (!existingChunks.isEmpty()) {
                 System.out.println("Chunks already exist for file: " + request.getFileId());
-                request.getChunks().addAll(existingChunks); 
+                request.getChunks().addAll(existingChunks);
             } else {
                 List<String> chunks = fileChunking.chunkFile(
                     new File(request.getFilePath()),
@@ -188,90 +195,126 @@ public class LoadBalancer{
                     4,
                     request.getFileId()
                 );
-                System.out.println("Chunks before adding to request: " + chunks.size());
                 request.getChunks().addAll(chunks);
-                System.out.println("Chunks after adding to request: " + request.getChunks().size());
             }
+            
             distributeChunks(request);
-
+            request.setStatus(Request.Status.COMPLETED);
+            
+            fileOperationStatus.put(request.getFileId(), Request.Status.COMPLETED);
+            
             System.out.println("File upload completed: " + request.getFileId());
+            
         } catch (Exception e) {
             System.err.println("Error during upload of file: " + request.getFileId());
             e.printStackTrace();
+            request.setStatus(Request.Status.FAILED);
+            fileOperationStatus.put(request.getFileId(), Request.Status.FAILED);
+            
         } finally {
             FileLockManager.unlockFile(request.getFileId());
-            fileOperationInProgress.remove(request.getFileId());
         }
     }
         
            
     
-    private void deleteChunks(Request request) throws SQLException, ClassNotFoundException {
-        if (FileLockManager.isFileLocked(request.getFileId())) {
-            System.out.println("File is currently in use. Waiting to delete: " + request.getFileId());
-            return;
+    private void deleteChunks(Request request) throws SQLException, ClassNotFoundException, InterruptedException {
+        while (true) {
+            Request.Status status = fileOperationStatus.get(request.getFileId());
+            if (status == null || status == Request.Status.COMPLETED) {
+                break;
+            } else if (status == Request.Status.FAILED) {
+                System.out.println("Previous operation for file " + request.getFileId() + " failed. Aborting deletion.");
+                return;
+            } else {
+                System.out.println("Waiting for previous operation to complete for file: " + request.getFileId());
+                Thread.sleep(1000);
+            }
         }
-        
-        fileOperationInProgress.put(request.getFileId(), true);
+    
+        fileOperationStatus.put(request.getFileId(), Request.Status.IN_PROGRESS);
         FileLockManager.lockFile(request.getFileId());
 
         try {
             List<String> chunksToDelete = new ArrayList<>(request.getChunks());
-
             for (String chunk : chunksToDelete) {
                 Container container = selectContainerForChunk(chunk);
                 if (container != null) {
                     container.deleteChunk(chunk);
-                    System.out.println("Deleted chunk " + chunk + " from " + container.getId());
                 } else {
                     System.err.println("Container not found for chunk: " + chunk);
                 }
             }
-
-            // Тепер видаляємо з бази після видалення з контейнерів
+            
             db.deleteChunksFromDb(request.getFileId());
-
             sendDeletionConfirmation(request.getFileId());
-
+            fileOperationStatus.put(request.getFileId(), Request.Status.COMPLETED);
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+            fileOperationStatus.put(request.getFileId(), Request.Status.FAILED);
         } finally {
             FileLockManager.unlockFile(request.getFileId());
-            fileOperationInProgress.remove(request.getFileId());
+            fileOperationStatus.remove(request.getFileId());
         }
     }
     
-    private void downloadChunks(Request request) throws IOException{
+    private void downloadChunks(Request request) throws IOException, InterruptedException{
         
-        if (FileLockManager.isFileLocked(request.getFileId())) {
-            System.out.println("File is currently in use. Waiting to delete: " + request.getFileId());
-            return;
+         while (true) {
+            Request.Status status = fileOperationStatus.get(request.getFileId());
+            if (status == null || status == Request.Status.COMPLETED) {
+                break;
+            } else if (status == Request.Status.FAILED) {
+                System.out.println("Previous operation for file " + request.getFileId() + " failed. Aborting download.");
+                return;
+            } else {
+                System.out.println("Waiting for previous operation to complete for file: " + request.getFileId());
+                Thread.sleep(1000);
+            }
         }
-
+    
+        fileOperationStatus.put(request.getFileId(), Request.Status.IN_PROGRESS);
         FileLockManager.lockFile(request.getFileId());
-        
-        try {
-            List<String> chunks = request.getChunks();
 
-            for(String chunk : chunks){
-                Container container = selectContainerForChunk(chunk);
-                if (container != null) {
-                container.downloadChunk(chunk, "/home/ntu-user/Downloads/" + chunk); 
-                System.out.println("Downloaded chunk " + chunk + " from " + container.getId());
+        try {
+            
+            if (request.getChunks() == null || request.getChunks().isEmpty()) {
+                List<String> chunksFromDb = db.getChunksForFile(request.getFileId());
+                if (chunksFromDb != null) {
+                    request.getChunks().addAll(chunksFromDb);
                 }
             }
-                combineChunks(chunks, request.getFileId());
-                
-        } finally{
-            FileLockManager.unlockFile(request.getFileId()); 
+            
+            List<String> chunks = request.getChunks();
+            for (String chunk : chunks) {
+                Container container = selectContainerForChunk(chunk);
+                if (container != null) {
+                    container.downloadChunk(chunk, "/home/ntu-user/Downloads/" + chunk);
+                    System.out.println("Downloaded chunk " + chunk + " from " + container.getId());
+                } else {
+                    System.err.println("Container not found for chunk: " + chunk);
+                }
+            }
+            combineChunks(chunks, request.getFileId());
+            fileOperationStatus.put(request.getFileId(), Request.Status.COMPLETED);
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+            fileOperationStatus.put(request.getFileId(), Request.Status.FAILED);
+            
+        } finally {
+            FileLockManager.unlockFile(request.getFileId());
+            fileOperationStatus.remove(request.getFileId());
         }
-        
     }
+        
     
     private void distributeChunks(Request request) throws JSchException, IOException, SftpException {
         List<String> chunks = request.getChunks();
         for (String chunk : chunks) {
             Container selectedContainer = selectContainerForChunk(chunk);
             if (selectedContainer != null) {
-                simulateDelay(); 
                 selectedContainer.sendFileToContainer(chunk);
          
             }
@@ -309,29 +352,46 @@ public class LoadBalancer{
        
 
     public void addRequest(Request request) throws JSchException, IOException, SftpException, SQLException, ClassNotFoundException{
-           if (fileOperationInProgress.getOrDefault(request.getFileId(), false)) {
-                System.out.println("Operation already in progress for file: " + request.getFileId() + ". Request added to waitingQueue.");
-            }
-           
-        synchronized (waitingQueue) {
-            long delay = simulateDelay();
-            Task task = new Task(request, delay);
-            waitingQueue.offer(task);
-            System.out.println("Added task with delay " + delay + " ms for file " + request.getFileId());
+        
+        if (fileOperationStatus.containsKey(request.getFileId()) &&
+            fileOperationStatus.get(request.getFileId()) != Request.Status.COMPLETED) {
+            System.out.println("Operation already in progress for file: " + request.getFileId() + ". New request will wait.");
+            // Можна відкласти додавання або об'єднати запит з існуючим.
+            return;
         }
+
+        long baseDelay = simulateDelay();
+        long now = System.currentTimeMillis();
+        long delay;
+        Long prevEndTime = fileOperationEndTime.get(request.getFileId());
+
+        // Якщо попередня операція ще не завершилася, новий запит повинен починати свою затримку після її завершення
+        if (prevEndTime != null && prevEndTime > now) {
+            delay = (prevEndTime - now) + baseDelay;
+            System.out.println("Adjusted delay for file " + request.getFileId() + ": " + delay + " ms (base: " + baseDelay + " ms)");
+        } else {
+            delay = baseDelay;
+        }
+
+        long scheduledStart = now + delay;
+        fileOperationEndTime.put(request.getFileId(), scheduledStart);
+
+        Task task = new Task(request, delay);
+        synchronized (waitingQueue) {
+            waitingQueue.offer(task);
+        }
+        System.out.println("Added task with delay " + delay + " ms for file " + request.getFileId());
 
     }
     
-     private void processRequests() throws JSchException, IOException, SftpException, SQLException, ClassNotFoundException {
+     private void processRequests() throws JSchException, IOException, SftpException, SQLException, ClassNotFoundException, InterruptedException {
            synchronized (waitingQueue) {
             while (!waitingQueue.isEmpty() && processingQueue.size() < maxConcurrentRequests) {
                 Task task = selectNextTask();
                 if (task == null) {
-                    // Немає готових завдань, виходимо з циклу
                     break;
                 }
                 if (task.isReady()) {
-                    // Видаляємо завдання з waitingQueue (краще використовувати remove(task), оскільки selectNextTask() може повертати не перший елемент)
                     waitingQueue.remove(task);
                     processingQueue.offer(task);
                     executeTask(task);
@@ -354,10 +414,10 @@ public class LoadBalancer{
         // Вибираємо алгоритм з меншим загальним часом обробки
         if (sjfTime < fcfsTime) {
             schedulingAlgorithm = SchedulingAlgorithm.SJN;
-            System.out.println("Adjusted scheduling algorithm to SJN (Total time: " + sjfTime + "s vs FCFS: " + fcfsTime + "s).");
+            //System.out.println("Adjusted scheduling algorithm to SJN (Total time: " + sjfTime + "s vs FCFS: " + fcfsTime + "s).");
         } else {
             schedulingAlgorithm = SchedulingAlgorithm.FCFS;
-            System.out.println("Adjusted scheduling algorithm to FCFS (Total time: " + fcfsTime + "s vs SJN: " + sjfTime + "s).");
+            //System.out.println("Adjusted scheduling algorithm to FCFS (Total time: " + fcfsTime + "s vs SJN: " + sjfTime + "s).");
         }
     }
      
@@ -408,7 +468,7 @@ public class LoadBalancer{
         }
     }
     
-    private void executeTask(Task task) throws JSchException, IOException, SftpException, SQLException, ClassNotFoundException {
+    private void executeTask(Task task) throws JSchException, IOException, SftpException, SQLException, ClassNotFoundException, InterruptedException {
         Request request = task.getRequest();
         switch (request.getOperationType()) {
             case UPLOAD:

@@ -16,7 +16,7 @@ public class MQTTClient {
     
      
     private static final String BROKER_URL = "tcp://mqtt-broker:1883"; 
-    private static final String CLIENT_ID = "Dima";
+    private static final String CLIENT_ID = MqttClient.generateClientId();
     private static final String TOPIC = "load-balancer/file-operation";
 
     private MqttClient client;

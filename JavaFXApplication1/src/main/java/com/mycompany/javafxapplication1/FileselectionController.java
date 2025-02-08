@@ -331,8 +331,7 @@ public class FileselectionController {
         Optional<ButtonType> result = confirmationAlert.showAndWait();
         if (result.isPresent() && result.get() == ButtonType.OK) {
             try {
-                Path filePath = Paths.get(selectedFile.getFilePath());
-                Files.deleteIfExists(filePath);
+
 
                 List<String> chunks = db.getChunksForFile(selectedFile.getFileId());
                 Request deleteRequest = new Request(userId, selectedFile.getFileId(), Request.OperationType.DELETE, 0, 3, chunks, selectedFile.getFilePath());
@@ -354,9 +353,7 @@ public class FileselectionController {
                 });
 
                 showAlert("Success", "File deleted successfully!", Alert.AlertType.INFORMATION);
-            } catch (IOException e) {
-                e.printStackTrace();
-                showAlert("Error", "Failed to delete the file from disk.", Alert.AlertType.ERROR);
+                
             } catch (Exception e) {
                 e.printStackTrace();
                 showAlert("Error", "Failed to delete the file from database.", Alert.AlertType.ERROR);

@@ -46,6 +46,15 @@ public class Request {
         return operationType;
     }
     
+    public Status getStatus(){
+        return status;
+    }
+    
+    public void setStatus(Status newStatus){
+        this.status = newStatus;    
+ 
+    }
+    
     public String getFileId(){
         return fileId;
     }
