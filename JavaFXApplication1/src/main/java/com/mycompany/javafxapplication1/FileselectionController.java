@@ -109,6 +109,9 @@ public class FileselectionController {
     @FXML
     private Button downloadFile;
     
+    @FXML 
+    private Button openTerminal;
+    
     
     private File selectedFile;
    
@@ -117,12 +120,19 @@ public class FileselectionController {
     private int userId;
     private DB db;
     
-    private Container container1;
-    private Container container2;
-    private Container container3;
-    private Container container4;
+    public Container container1;
+    public Container container2;
+    public Container container3;
+    public Container container4;
     
- 
+    @FXML
+    public void initialize() {
+        container1 = new Container("container1", "soft40051-files-container1", 22, "ntu-user", "ntu-user");
+        container2 = new Container("container2", "soft40051-files-container2", 22, "ntu-user", "ntu-user");
+        container3 = new Container("container3", "soft40051-files-container3", 22, "ntu-user", "ntu-user");
+        container4 = new Container("container4", "soft40051-files-container4", 22, "ntu-user", "ntu-user");
+    }
+    
 
     public FileselectionController() throws MqttException {  
         this.mqttClient = new MQTTClient();
@@ -268,7 +278,7 @@ public class FileselectionController {
     }
 
     @FXML
-    private void updateFileHandler(ActionEvent event) throws IOException, ClassNotFoundException {
+    private void updateFileHandler(ActionEvent event) throws IOException, ClassNotFoundException, MqttException {
         
     FileModel selectedFile = (FileModel) fileTableView.getSelectionModel().getSelectedItem();
 
@@ -283,12 +293,14 @@ public class FileselectionController {
             }
             
             String updatedContent = fileTextArea.getText();
-          
             Path filePath = Paths.get(selectedFile.getFilePath());
             Files.writeString(filePath, updatedContent, StandardCharsets.UTF_8);
-
             long newFileLength = Files.size(filePath);
             int newCrc32 = calculateCRC32(updatedContent); 
+            
+            Request request = new Request(userId, selectedFile.getFileId(), Request.OperationType.UPDATE, newFileLength, 1, new ArrayList<>(), filePath.toString());
+            mqttClient.sendRequest(request);
+            
             db.updateFileForUser(
                 selectedFile.getFileId(),
                 selectedFile.getFilename(),
@@ -422,9 +434,9 @@ public class FileselectionController {
     
     
     
-    private void openContainerTerminal(Container container) {
+    public void openContainerTerminal(Container container) {
         new Thread(container::openRemoteTerminal).start(); 
-        }
+    }
     
     @FXML
     public void selectContainer1Handler(ActionEvent event){
@@ -434,17 +446,35 @@ public class FileselectionController {
     @FXML
     public void selectContainer2Handler(ActionEvent event){
         openContainerTerminal(container2);
-        }
+    }
     
     @FXML
     public void selectContainer3Handler(ActionEvent event){
         openContainerTerminal(container3);
-        }
+    }
     
     @FXML
     public void selectContainer4Handler(ActionEvent event){
         openContainerTerminal(container4);
-        }
+    }
+    
+    @FXML
+    private void openTerminalHandler(ActionEvent event) throws IOException{
+        Stage secondaryStage = new Stage();
+        Stage primaryStage = (Stage) openTerminal.getScene().getWindow();
+        
+        FXMLLoader loader = new FXMLLoader();
+        loader.setLocation(getClass().getResource("TerminalEmulation.fxml"));
+        Parent root = loader.load();
+        
+        TerminalEmulationController controller = loader.getController();
+
+        Scene scene = new Scene(root, 640, 480);
+        secondaryStage.setScene(scene);
+        secondaryStage.setTitle("Select file");
+        secondaryStage.show();
+        primaryStage.close();
+    }
     
     
     

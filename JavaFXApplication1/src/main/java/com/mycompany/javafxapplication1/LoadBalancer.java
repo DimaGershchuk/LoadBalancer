@@ -79,7 +79,7 @@ public class LoadBalancer{
                 try {
                     processRequests();
 
-                    Thread.sleep(25000);
+                    Thread.sleep(15000);
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -145,6 +145,9 @@ public class LoadBalancer{
 
         Gson gson = new Gson();
         Request request = gson.fromJson(payload, Request.class);
+        
+        String details = "Received MQTT request with payload: " + payload;
+        db.logMqttRequest(request.getUserId(), request.getRequestId(), request.getOperationType().toString(), details);
 
         addRequest(request);
     }
@@ -168,7 +171,6 @@ public class LoadBalancer{
             System.out.println("File is currently being processed. Waiting to upload: " + request.getFileId());
             return;
         }
-    // Перевіряємо, чи вже існує операція для цього файлу, що не завершилася успішно.
         Request.Status currentStatus = fileOperationStatus.get(request.getFileId());
         if (currentStatus != null && currentStatus != Request.Status.COMPLETED) {
             System.out.println("Previous operation for file " + request.getFileId() + " is still in progress or failed. Aborting upload.");
@@ -308,6 +310,65 @@ public class LoadBalancer{
             fileOperationStatus.remove(request.getFileId());
         }
     }
+    
+    private void updateChunks(Request request) throws SQLException, ClassNotFoundException, IOException, FileNotFoundException, Exception{
+        
+        if(FileLockManager.isFileLocked(request.getFileId())){
+            System.out.println("File is currently being processed. Waiting to update: " + request.getFileId());
+            return;
+        }
+        
+        Request.Status currentStatus = fileOperationStatus.get(request.getFileId());
+        if (currentStatus != null && currentStatus != Request.Status.COMPLETED) {
+            System.out.println("Previous operation for file " + request.getFileId() + " is still in progress or failed. Aborting update.");
+            return;
+        }
+        
+        fileOperationStatus.put(request.getFileId(), Request.Status.IN_PROGRESS);
+        FileLockManager.lockFile(request.getFileId());
+        request.setStatus(Request.Status.IN_PROGRESS);
+        
+        try {
+        
+            System.out.println("Updating file : " + request.getFileId());
+
+            List<String> oldChunks = db.getChunksForFile(request.getFileId());
+            if(!oldChunks.isEmpty()){
+                for(String chunk : oldChunks){
+                    Container container = selectContainerForChunk(chunk);
+                    if(container != null){
+                        container.deleteChunk(chunk);
+                        System.out.println("Deleted old chunk " + chunk + " from container " + container.getId());
+                    } else {
+                        System.err.println("Container not found for old chunk: " + chunk);
+                    }
+                }
+
+                db.deleteChunksFromDb(request.getFileId());
+            }
+
+            List<String> newChunks = fileChunking.chunkFile(new File(request.getFilePath()), "chunks/", 4, request.getFileId());
+
+            request.getChunks().clear();
+            request.getChunks().addAll(newChunks);
+
+            distributeChunks(request);
+
+            request.setStatus(Request.Status.COMPLETED);
+            fileOperationStatus.put(request.getFileId(), Request.Status.COMPLETED);
+            fileOperationEndTime.put(request.getFileId(), System.currentTimeMillis());
+
+            System.out.println("File update completed: " + request.getFileId());
+        } catch (Exception e) {
+            System.err.println("Error during update of file: " + request.getFileId());
+            e.printStackTrace();
+            request.setStatus(Request.Status.FAILED);
+            fileOperationStatus.put(request.getFileId(), Request.Status.FAILED);
+        } finally {
+            FileLockManager.unlockFile(request.getFileId());
+        }
+        
+    }
         
     
     private void distributeChunks(Request request) throws JSchException, IOException, SftpException {
@@ -384,7 +445,7 @@ public class LoadBalancer{
 
     }
     
-     private void processRequests() throws JSchException, IOException, SftpException, SQLException, ClassNotFoundException, InterruptedException {
+     private void processRequests() throws JSchException, IOException, SftpException, SQLException, ClassNotFoundException, InterruptedException, Exception {
            synchronized (waitingQueue) {
             while (!waitingQueue.isEmpty() && processingQueue.size() < maxConcurrentRequests) {
                 Task task = selectNextTask();
@@ -468,11 +529,14 @@ public class LoadBalancer{
         }
     }
     
-    private void executeTask(Task task) throws JSchException, IOException, SftpException, SQLException, ClassNotFoundException, InterruptedException {
+    private void executeTask(Task task) throws JSchException, IOException, SftpException, SQLException, ClassNotFoundException, InterruptedException, Exception {
         Request request = task.getRequest();
         switch (request.getOperationType()) {
             case UPLOAD:
                 uploadFile(request);
+                break;
+            case UPDATE:
+                updateChunks(request);
                 break;
             case DELETE:
                 deleteChunks(request);
@@ -514,6 +578,7 @@ public class LoadBalancer{
     
     public static void main(String[] args) {
         try {
+            
             List<Container> containers = new ArrayList<>();
             containers.add(new Container("container1", "soft40051-files-container1", 22, "ntu-user", "ntu-user"));
             containers.add(new Container("container2", "soft40051-files-container2", 22, "ntu-user", "ntu-user"));

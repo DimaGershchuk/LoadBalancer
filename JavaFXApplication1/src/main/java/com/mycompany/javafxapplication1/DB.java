@@ -34,8 +34,8 @@ import javax.crypto.spec.PBEKeySpec;
  * @author ntu-user
  */
 public class DB {
-    private String jdbcUrl = "jdbc:mysql://mySql:3306/Coursework";  // Змінено для MySQL
-    private String username = "root";  // Вкажіть свій логін
+    private String jdbcUrl = "jdbc:mysql://mySql:3306/Coursework";  
+    private String username = "root"; 
     private String password = "280104";
     private int timeout = 30;
     private String dataBaseName = "Coursework";
@@ -47,9 +47,7 @@ public class DB {
     private int keylength = 256;
     private String saltValue;
     
-    /**
-     * @brief constructor - generates the salt if it doesn't exists or load it from the file .salt
-     */
+
     DB() {
         try {
             File fp = new File(".salt");
@@ -90,12 +88,7 @@ public class DB {
         }
     }
         
-    
-    
-    /**
-     * @brief create a new table
-     * @param tableName name of type String
-     */
+   
     public void createTable(String tableName) throws ClassNotFoundException {
         String query = "CREATE TABLE IF NOT EXISTS " + tableName +
                        " (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255), password VARCHAR(255), role VARCHAR(50))";
@@ -107,12 +100,8 @@ public class DB {
         } 
     }
 
-    /**
-     * @brief add data to the database method
-     * @param user name of type String
-     * @param password of type String
-     */
-        public void addDataToDB(String user, String password, String role) throws InvalidKeySpecException, ClassNotFoundException {
+
+    public void addDataToDB(String user, String password, String role) throws InvalidKeySpecException, ClassNotFoundException {
         String query = "INSERT INTO " + dataBaseTableName + " (name, password, role) VALUES (?, ?, ?)";
         try (PreparedStatement pstmt = connection.prepareStatement(query)) {
             pstmt.setString(1, user);
@@ -124,13 +113,10 @@ public class DB {
         }
     }
 
-    /**
-     * @brief get data from the Database method
-     * @retunr results as ResultSet
-     */
     public ObservableList<User> getUserData() throws ClassNotFoundException {
         
         ObservableList<User> result = FXCollections.observableArrayList();
+        
         String query = "SELECT * FROM " + dataBaseTableName;
         try (Statement stmt = connection.createStatement();
              ResultSet rs = stmt.executeQuery(query)) {
@@ -142,6 +128,46 @@ public class DB {
         }
         return result;
     }
+    
+    public ObservableList<FileModel> getFiles() throws ClassNotFoundException {
+        
+        ObservableList<FileModel> result = FXCollections.observableArrayList();
+        
+        String query = "SELECT * FROM files";
+        try (Statement stmt = connection.createStatement();
+             ResultSet rs = stmt.executeQuery(query)) {
+            while (rs.next()) {
+                result.add(new FileModel(rs.getString("file_id"), rs.getString("filename"), rs.getLong("file_length"), rs.getInt("crc32"), rs.getString("file_path")));
+            }
+        } catch (SQLException ex) {
+            Logger.getLogger(DB.class.getName()).log(Level.SEVERE, null, ex);
+        }
+        return result;
+    }
+    
+    public List<AclEntry> getAclEntries(){
+        List<AclEntry> result = new ArrayList<>();
+        String query = "SELECT * FROM acl";
+
+        try (Statement stmt = connection.createStatement();
+             ResultSet rs = stmt.executeQuery(query)) {
+
+            while (rs.next()) {
+                String fileId = rs.getString("file_id");
+                int userId = rs.getInt("user_id");
+                boolean canRead = rs.getBoolean("can_read");
+                boolean canWrite = rs.getBoolean("can_write");
+
+                AclEntry entry = new AclEntry(fileId, userId, canRead, canWrite);
+                result.add(entry);
+            }
+        } catch (SQLException ex) {
+            Logger.getLogger(DB.class.getName()).log(Level.SEVERE, null, ex);
+        }
+
+        return result;
+    }
+    
     
     
     public String getUserRole(String username) {
@@ -197,8 +223,8 @@ public class DB {
     public int getUserId(String username) throws SQLException, ClassNotFoundException {
         
         if (connection == null) {
-                connection = initConnection();
-                    }
+            connection = initConnection();
+        }
 
         String query = "SELECT id FROM users WHERE name = ?";
         try(PreparedStatement stmt = connection.prepareStatement(query)){
@@ -207,10 +233,10 @@ public class DB {
 
         if (rs.next()) {
             return rs.getInt("id");
-        }
+            }
         }
         return -1; 
-}
+    }
 
     
     
@@ -218,7 +244,6 @@ public class DB {
         String query = "UPDATE Users SET name = ?, password = ?, role = ? WHERE name = ?";
         try (PreparedStatement pstmt = connection.prepareStatement(query)){
               
-
             pstmt.setString(1, newUsername);
             pstmt.setString(2, generateSecurePassword(newPassword));
             pstmt.setString(3, newRole);
@@ -240,6 +265,7 @@ public class DB {
                 }
         
         String sql = "DELETE FROM Users WHERE name = ?";
+        
         try(
             PreparedStatement pstmt = connection.prepareStatement(sql)){
             pstmt.setString(1, username);
@@ -251,12 +277,6 @@ public class DB {
         }
     }
     
-    /**
-     * @brief decode password method
-     * @param user name as type String
-     * @param pass plain password of type String
-     * @return true if the credentials are valid, otherwise false
-     */
     public boolean validateUser(String user, String pass) throws InvalidKeySpecException, ClassNotFoundException {
         String query = "SELECT password FROM " + dataBaseTableName + " WHERE name = ?";
         try (PreparedStatement pstmt = connection.prepareStatement(query)) {
@@ -283,7 +303,6 @@ public class DB {
         return new String(finalval);
     }
 
-    /* Method to generate the hash value */
     private byte[] hash(char[] password, byte[] salt) throws InvalidKeySpecException {
         PBEKeySpec spec = new PBEKeySpec(password, salt, iterations, keylength);
         Arrays.fill(password, Character.MIN_VALUE);
@@ -307,18 +326,10 @@ public class DB {
         return finalval;
     }
 
-    /**
-     * @brief get table name
-     * @return table name as String
-     */
     public String getTableName() {
         return this.dataBaseTableName;
     }
 
-    /**
-     * @brief print a message on screen method
-     * @param message of type String
-     */
     public void log(String message) {
         System.out.println(message);
 
@@ -343,15 +354,14 @@ public class DB {
         
         while (rs.next()) {
             result.add(new FileModel(rs.getString("file_id"), rs.getString("filename"), rs.getLong("file_length"), rs.getInt("crc32"), rs.getString("file_path")));
-        }
-        }
+                }
+            }
         }
     } catch(SQLException e){
          System.err.println(e.getMessage());
+        }
+        return result;
     }
-    return result;
-    }
-    
     
     public String addFileToUser(String filename, long fileLength, int crc32, String filePath, int userId) throws ClassNotFoundException, SQLException{
         
@@ -366,20 +376,11 @@ public class DB {
                 connection = initConnection();
             }
 
-            // 1. Перевірка, чи файл вже існує
             try (PreparedStatement checkStmt = connection.prepareStatement(checkFileQuery)) {
                 checkStmt.setString(1, filename);
                 checkStmt.setString(2, filePath);
-
-                ResultSet resultSet = checkStmt.executeQuery();
-                if (resultSet.next()) {
-                    String existingFileId = resultSet.getString("file_id");
-                    System.out.println("File already exists with file_id: " + existingFileId);
-                    return existingFileId; // Повертаємо існуючий file_id
-                }
             }
 
-            // 2. Якщо файл не існує, додаємо новий запис
             try (PreparedStatement fileStmt = connection.prepareStatement(insertFileQuery)) {
                 fileStmt.setString(1, generatedFileId);
                 fileStmt.setString(2, filename);
@@ -389,7 +390,6 @@ public class DB {
                 fileStmt.executeUpdate();
             }
 
-            // 3. Додаємо права доступу до ACL
             try (PreparedStatement aclStmt = connection.prepareStatement(insertAclQuery)) {
                 aclStmt.setString(1, generatedFileId);
                 aclStmt.setInt(2, userId);
@@ -397,7 +397,7 @@ public class DB {
             }
 
             System.out.println("New file added with file_id: " + generatedFileId);
-            return generatedFileId; // Повертаємо новий file_id, якщо файл не існував
+            return generatedFileId;
 
         } catch (SQLException e) {
             e.printStackTrace();
@@ -409,7 +409,6 @@ public class DB {
         String updateFileQuery = "UPDATE files SET filename = ?, file_length = ?, crc32 = ?, file_path = ? WHERE file_id = ?";
         
         try {
-            
             if (connection == null) {
             connection = initConnection();
                 }
@@ -424,9 +423,9 @@ public class DB {
             fileStm.executeUpdate();
             }
             
-    } catch (SQLException e) {
-        e.printStackTrace();
-    }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
     
     }
     
@@ -459,9 +458,9 @@ public class DB {
 
         System.out.println("File and related chunks deleted successfully.");
         
-    } catch (SQLException e) {
-        e.printStackTrace();
-    }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
     }
     
     public void addChunkMetaData(String chunkId, String fileId, String containerId) throws ClassNotFoundException{
@@ -505,7 +504,6 @@ public class DB {
         String insertSql = "INSERT INTO acl (file_id, user_id, can_read, can_write) VALUES (?, ?, ?, ?)";
         String updateSql = "UPDATE acl SET can_read = ?, can_write = ? WHERE file_id = ? AND user_id = ?";
         
-        
         try {
       
             if (connection == null) {
@@ -536,8 +534,8 @@ public class DB {
                 pstmtInsert.setBoolean(4, canWrite);
                 pstmtInsert.executeUpdate();
                 }
-            }
-            }
+                    }
+                }
            }
             
         } catch(SQLException e) {
@@ -612,12 +610,48 @@ public class DB {
 
         try (PreparedStatement deleteStmt = connection.prepareStatement(deleteQuery)) {
             deleteStmt.setString(1, fileId);
-            deleteStmt.executeUpdate();  // Виконання DELETE
+            deleteStmt.executeUpdate(); 
         }
 
-        return chunks;  // Повертаємо список видалених chunk_id
+        return chunks;  
     }
     
+       public void storeEncryptionKey(String fileId, String encryptedKey) throws SQLException {
+        String sql = "INSERT INTO encryption_keys (file_id, encryption_key) VALUES (?, ?)";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setString(1, fileId);
+            pstmt.setString(2, encryptedKey);
+            pstmt.executeUpdate();
+        }
     }
+
+        public String getEncryptionKey(String fileId) throws SQLException {
+            String sql = "SELECT encryption_key FROM encryption_keys WHERE file_id = ?";
+            try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+                pstmt.setString(1, fileId);
+                try (ResultSet rs = pstmt.executeQuery()) {
+                    if (rs.next()) {
+                        return rs.getString("encryption_key");
+                    }
+                }
+            }
+            return null;
+        }
+    
+    public void logMqttRequest(int userId, String requestId, String operationType, String details) {
+        
+        String query = "INSERT INTO mqtt_logs (user_id, request_id, operation_type, details) VALUES (?, ?, ?, ?)";
+        try (PreparedStatement pstmt = connection.prepareStatement(query)) {
+            pstmt.setInt(1, userId);
+            pstmt.setString(2, requestId);
+            pstmt.setString(3, operationType);
+            pstmt.setString(4, details);
+            pstmt.executeUpdate();
+        } catch (SQLException ex) {
+            Logger.getLogger(DB.class.getName()).log(Level.SEVERE, null, ex);
+        }
+    }
+    
+}
 
 

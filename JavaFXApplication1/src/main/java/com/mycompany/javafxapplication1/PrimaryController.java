@@ -93,7 +93,7 @@ public class PrimaryController {
                     FileselectionController controller = loader.getController();
                     controller.initialiseUsers(new String[]{username, String.valueOf(userId)});
                     controller.initialiseFiles(new String[]{username, String.valueOf(userId)});
-                    Scene scene = new Scene(root, 640, 480);
+                    Scene scene = new Scene(root, 1126, 630);
                     secondaryStage.setScene(scene);
                     secondaryStage.setTitle("File Selection");
                     

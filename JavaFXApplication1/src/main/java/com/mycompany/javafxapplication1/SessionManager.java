@@ -14,34 +14,45 @@ import java.util.TimerTask;
 import javafx.fxml.FXMLLoader;
 import javafx.scene.Parent;
 import javafx.scene.control.Alert;
+import javafx.scene.input.KeyEvent;
+import javafx.scene.input.MouseEvent;
 /**
  *
  * @author ntu-user
  */
 public class SessionManager {
-     private static final long TIMEOUT = 30 * 1000; // 30 секунд
+    
+    private static final long TIMEOUT = 60 * 1000; // 50 секунд
     private Timer inactivityTimer;
-    private Stage primaryStage;
+    private final Stage primaryStage;
 
     public SessionManager(Stage stage) {
         this.primaryStage = stage;
+
+        if (primaryStage.getScene() != null) {
+            startSessionTracking(primaryStage.getScene());
+        }
+        
+        primaryStage.sceneProperty().addListener((obs, oldScene, newScene) -> {
+            if (newScene != null) {
+                startSessionTracking(newScene);
+            }
+        });
+        resetInactivityTimer();
     }
 
+    // Додає слухачі подій до сцени для відстеження активності
     public void startSessionTracking(Scene scene) {
-        // Ініціалізація таймера
+        scene.addEventFilter(MouseEvent.ANY, event -> resetInactivityTimer());
+        scene.addEventFilter(KeyEvent.ANY, event -> resetInactivityTimer());
         resetInactivityTimer();
-
-        // Відстеження подій миші та клавіатури
-        scene.addEventFilter(javafx.scene.input.MouseEvent.ANY, event -> resetInactivityTimer());
-        scene.addEventFilter(javafx.scene.input.KeyEvent.ANY, event -> resetInactivityTimer());
     }
 
     private void resetInactivityTimer() {
         if (inactivityTimer != null) {
             inactivityTimer.cancel();
         }
-
-        inactivityTimer = new Timer(true); // Фоновий потік
+        inactivityTimer = new Timer(true);
         inactivityTimer.schedule(new TimerTask() {
             @Override
             public void run() {
@@ -54,11 +65,10 @@ public class SessionManager {
         try {
             FXMLLoader loader = new FXMLLoader(getClass().getResource("primary.fxml"));
             Parent root = loader.load();
-
-            primaryStage.setScene(new Scene(root, 640, 480));
+            Scene loginScene = new Scene(root, 640, 480);
+            primaryStage.setScene(loginScene);
             primaryStage.setTitle("Login");
             primaryStage.show();
-
             showAlert("Session Timeout", "Your session has expired. Please log in again.", Alert.AlertType.WARNING);
         } catch (Exception e) {
             e.printStackTrace();

@@ -29,31 +29,34 @@ public class RemoteTerminal {
     public void startSession() {
         
         JSch jsch = new JSch();
-        
-        try {
-            Session session = jsch.getSession(username, host, port);
-            session.setPassword(password);
-            session.setConfig("StrictHostKeyChecking", "no");
-            session.connect();
+            try {
+                Session session = jsch.getSession(username, host, port);
+                session.setPassword(password);
+                session.setConfig("StrictHostKeyChecking", "no");
+                session.connect();
 
-            Channel channel = session.openChannel("shell");
-            channel.setInputStream(System.in); 
-            channel.setOutputStream(System.out);  
-            channel.connect();
+                Channel channel = session.openChannel("shell");
+                channel.setInputStream(System.in);
+                channel.setOutputStream(System.out);
+                channel.connect();
 
-            System.out.println("Connected to " + host + ". Type 'exit' inside the terminal to close the session.");
+                System.out.println("Connected to " + host + ". Type 'exit' inside the terminal to close the session.");
 
-   
-            while (!channel.isClosed()) {
-                Thread.sleep(1000);
+                while (!channel.isClosed()) {
+                    Thread.sleep(100);
+                }
+
+                channel.disconnect();
+                session.disconnect();
+                System.out.println("Disconnected from " + host);
+            } catch (Exception e) {
+                System.err.println("Failed to connect to remote terminal: " + e.getMessage());
+                e.printStackTrace();
+                // Тут можна отримати первинну причину:
+                Throwable cause = e.getCause();
+                if (cause != null) {
+                    cause.printStackTrace();
+                }
             }
-
-            channel.disconnect();
-            session.disconnect();
-            System.out.println("Disconnected from " + host);
-        } catch (Exception e) {
-            System.err.println("Failed to connect to remote terminal: " + e.getMessage());
-            e.printStackTrace();
         }
     }
-}

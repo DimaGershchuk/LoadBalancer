@@ -37,6 +37,10 @@ public class Request {
         this.status = Status.PENDING;
         this.filePath = filePath;
     }
+    
+    public String getRequestId(){
+        return requestId;
+    }
 
    public String getId() {
         return fileId;
@@ -53,6 +57,10 @@ public class Request {
     public void setStatus(Status newStatus){
         this.status = newStatus;    
  
+    }
+    
+    public int getUserId(){
+        return userId;
     }
     
     public String getFileId(){

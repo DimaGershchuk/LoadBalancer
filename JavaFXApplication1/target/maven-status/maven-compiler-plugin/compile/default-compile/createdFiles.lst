@@ -3,8 +3,11 @@ com/mycompany/javafxapplication1/Request$OperationType.class
 com/mycompany/javafxapplication1/FileChunking.class
 com/mycompany/javafxapplication1/ShedulerModule.class
 com/mycompany/javafxapplication1/SessionManager.class
+com/mycompany/javafxapplication1/AclEntry.class
 com/mycompany/javafxapplication1/SSHClient.class
+com/mycompany/javafxapplication1/LocalDB.class
 com/mycompany/javafxapplication1/CreateFileDialogController.class
+com/mycompany/javafxapplication1/TerminalEmulationController.class
 com/mycompany/javafxapplication1/LoadBalancer$SchedulingAlgorithm.class
 com/mycompany/javafxapplication1/RemoteTerminal.class
 com/mycompany/javafxapplication1/Request$Status.class
@@ -20,6 +23,7 @@ com/mycompany/javafxapplication1/LoadBalancer$TrafficLevel.class
 com/mycompany/javafxapplication1/FileModel.class
 com/mycompany/javafxapplication1/Request.class
 com/mycompany/javafxapplication1/LoadBalancer.class
+com/mycompany/javafxapplication1/DatabaseSynchronizer.class
 com/mycompany/javafxapplication1/PrimaryController.class
 com/mycompany/javafxapplication1/App.class
 com/mycompany/javafxapplication1/LoadBalancer$1.class

@@ -19,8 +19,10 @@ public class App extends Application {
 
     @Override
     public void start(Stage stage) throws IOException {
+        
         Stage secondaryStage = new Stage();
         DB myObj = new DB();
+        
         try {
             FXMLLoader loader = new FXMLLoader();
             loader.setLocation(getClass().getResource("primary.fxml"));
@@ -29,6 +31,10 @@ public class App extends Application {
             secondaryStage.setScene(scene);
             secondaryStage.setTitle("Primary View");
             secondaryStage.show();
+            
+            //SessionManager sessionManager = new SessionManager(secondaryStage);
+            //sessionManager.startSessionTracking(scene);
+    
 
         } catch (Exception e) {
             e.printStackTrace();

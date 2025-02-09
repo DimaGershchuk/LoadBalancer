@@ -27,6 +27,8 @@ public class FileChunking {
 
         public List<String> chunkFile(File inputFile, String outputDir, int numberChunks, String fileId) throws NoSuchAlgorithmException, FileNotFoundException, IOException, ClassNotFoundException, Exception {
         
+        DB db = new DB();    
+            
         List<String> chunkNames = new ArrayList<>();
         
         KeyGenerator keyGen = KeyGenerator.getInstance("AES");
@@ -35,7 +37,11 @@ public class FileChunking {
         
         byte[] encryptedFileBytes = encryptFile(inputFile.getAbsolutePath(), secretKey);
         
-        byte[] encryptedKey = encryptKey(secretKey);
+        byte[] encryptedKeyBytes = encryptKey(secretKey);
+        
+        String encryptedKey = Base64.getEncoder().encodeToString(encryptedKeyBytes);
+        
+        db.storeEncryptionKey(fileId, encryptedKey);
         
         long fileLength = encryptedFileBytes.length;
         
@@ -60,7 +66,6 @@ public class FileChunking {
                 fos.write(chunk);
             }
             
-            DB db = new DB();
 
             Container selectedContainer = loadBalancer.roundRobin();
             String containerId = selectedContainer.getId();
