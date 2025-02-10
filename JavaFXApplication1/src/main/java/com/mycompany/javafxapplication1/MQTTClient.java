@@ -31,10 +31,33 @@ public class MQTTClient {
     private void connect() throws MqttException {
         MqttConnectOptions options = new MqttConnectOptions();
         options.setCleanSession(true);
-        client.connect(options);
+        options.setAutomaticReconnect(true);
+        //options.setKeepAliveInterval(60);
+    
+    client.setCallback(new MqttCallbackExtended() {
+        @Override
+        public void connectComplete(boolean reconnect, String serverURI) {
+            System.out.println("Connected to " + serverURI + (reconnect ? " (reconnected)" : ""));
+        }
+
+        @Override
+        public void connectionLost(Throwable cause) {
+            System.err.println("Connection lost: " + cause.getMessage());
+        }
+
+        @Override
+        public void messageArrived(String topic, MqttMessage message) throws Exception {
+            handleResponse(new String(message.getPayload()));
+        }
+
+        @Override
+        public void deliveryComplete(IMqttDeliveryToken token) {
+        }
+    });
+    
+    client.connect(options);
     }
 
-    // Send request to LoadBalancer
     public void sendRequest(Request request) throws MqttException {
         try {
             if (!client.isConnected()) {
@@ -45,10 +68,10 @@ public class MQTTClient {
             String jsonRequest = gson.toJson(request);
             MqttMessage message = new MqttMessage(jsonRequest.getBytes());
             client.publish("load-balancer/file-operation", message);
-            System.out.println("✅Sent MQTT request: " + jsonRequest);
+            System.out.println("Sent MQTT request: " + jsonRequest);
         } catch (MqttException e) {
             e.printStackTrace();
-            System.err.println("❌Failed to send MQTT request: " + e.getMessage());
+            System.err.println("Failed to send MQTT request: " + e.getMessage());
         }
     }
 
@@ -94,9 +117,9 @@ public class MQTTClient {
     public void reconnect() {
     try {
         client.reconnect();
-        System.out.println("✅Reconnected to MQTT broker.");
+        System.out.println("Reconnected to MQTT broker.");
     } catch (MqttException e) {
-        System.err.println("❌Failed to reconnect to MQTT broker: " + e.getMessage());
+        System.err.println("Failed to reconnect to MQTT broker: " + e.getMessage());
     }
 }
 }

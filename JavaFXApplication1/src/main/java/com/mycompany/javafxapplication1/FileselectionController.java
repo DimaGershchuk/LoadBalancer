@@ -15,7 +15,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.Scanner;
@@ -36,7 +35,6 @@ import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
-import javafx.scene.control.TextInputDialog;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.text.Text;
 import javafx.stage.FileChooser;
@@ -254,26 +252,6 @@ public class FileselectionController {
         } catch (IOException | SQLException | ClassNotFoundException e) {
             e.printStackTrace();
             showAlert("Error", "Failed to create the file.", Alert.AlertType.ERROR);
-        }
-    }
-    
-    @FXML
-    private void onFileSelect(){
-        
-        FileModel selectedFile = (FileModel) fileTableView.getSelectionModel().getSelectedItem();
-        
-        if (selectedFile != null) {
-        try {
-            Path filePath = Paths.get(selectedFile.getFilePath());
-            String content = Files.readString(filePath, StandardCharsets.UTF_8);
-            fileTextArea.setText(content);
-        } catch (IOException e) {
-            e.printStackTrace();
-            showAlert("Error", "Failed to load file content.", Alert.AlertType.ERROR);
-        }
-    } else {
-        fileTextArea.clear();
-        showAlert("Warning", "Please select a file from the table.", Alert.AlertType.WARNING);
         }
     }
 

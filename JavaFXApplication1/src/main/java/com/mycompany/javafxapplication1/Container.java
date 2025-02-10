@@ -63,8 +63,7 @@ public class Container {
     
     public void downloadChunk(String chunk, String destinationPath){
         
-        try{
-            System.out.println("Donwload chunk " + chunk + " from " + id);
+        try{;
             sshClient.downloadFile("/files/" + chunk, destinationPath);     
             
         } catch(Exception e ){

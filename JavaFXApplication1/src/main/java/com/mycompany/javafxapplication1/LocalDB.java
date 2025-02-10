@@ -29,7 +29,6 @@ public class LocalDB {
         return connection;
     }
 
-    // Метод для оновлення локальної таблиці users
     public void syncUsers(List<User> remoteUsers) throws SQLException {
         String deleteQuery = "DELETE FROM users";
         try (Statement stmt = connection.createStatement()) {
@@ -48,7 +47,6 @@ public class LocalDB {
         }
     }
 
-    // Аналогічні методи можна реалізувати для local_files та local_acl
     public void syncFiles(List<FileModel> remoteFiles) throws SQLException {
         String deleteQuery = "DELETE FROM local_files";
         try (Statement stmt = connection.createStatement()) {

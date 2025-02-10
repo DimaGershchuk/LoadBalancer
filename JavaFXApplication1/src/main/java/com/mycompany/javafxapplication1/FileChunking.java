@@ -70,7 +70,6 @@ public class FileChunking {
             Container selectedContainer = loadBalancer.roundRobin();
             String containerId = selectedContainer.getId();
             
-            System.out.println("Adding chunk to DB: " + chunkName);
             db.addChunkMetaData(chunkName, fileId, containerId);
             
             chunkNames.add(chunkName);
