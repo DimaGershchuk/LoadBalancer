@@ -11,7 +11,7 @@ package com.mycompany.javafxapplication1;
 public class Task {
     
     private final Request request;
-    private final long startTime;
+    private long startTime; 
     private final long delay;
 
     public Task(Request request, long delay) {
@@ -33,10 +33,19 @@ public class Task {
     }
     
     public String getName() {
-        return request.getFileId();  
+        return request.getFileId();
+    }
+
+    public void resetStartTime() {
+        this.startTime = System.currentTimeMillis();
+    }
+
+    public long getRemainingTime() {
+        long remaining = (startTime + delay) - System.currentTimeMillis();
+        return remaining > 0 ? remaining : 0;
     }
 
     public boolean isReady() {
-        return System.currentTimeMillis() >= startTime + delay;
+        return getRemainingTime() == 0;
     }
 }

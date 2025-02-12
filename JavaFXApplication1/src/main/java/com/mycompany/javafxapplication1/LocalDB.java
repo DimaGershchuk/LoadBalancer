@@ -59,7 +59,7 @@ public class LocalDB {
                 pstmt.setString(2, file.getFilename());
                 pstmt.setString(3, file.getFilePath());
                 pstmt.setLong(4, file.getFileLength());
-                pstmt.setInt(5, file.getCrc32());
+                pstmt.setLong(5, file.getCrc32());
                 pstmt.addBatch();
             }
             pstmt.executeBatch();
@@ -81,6 +81,17 @@ public class LocalDB {
                 pstmt.addBatch();
             }
             pstmt.executeBatch();
+        }
+    }
+    
+    public void insertSession(int userId, String username, String role) throws SQLException {
+        String insertQuery = "INSERT INTO session (user_id, username, role) VALUES (?, ?, ?)";
+        try (PreparedStatement pstmt = connection.prepareStatement(insertQuery)) {
+            pstmt.setInt(1, userId);
+            pstmt.setString(2, username);
+            pstmt.setString(3, role);
+            pstmt.executeUpdate();
+            System.out.println("Session data inserted for user: " + username);
         }
     }
 }

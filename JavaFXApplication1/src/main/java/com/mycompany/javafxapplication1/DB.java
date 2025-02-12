@@ -363,7 +363,7 @@ public class DB {
         return result;
     }
     
-    public String addFileToUser(String filename, long fileLength, int crc32, String filePath, int userId) throws ClassNotFoundException, SQLException{
+    public String addFileToUser(String filename, long fileLength, long crc32, String filePath, int userId) throws ClassNotFoundException, SQLException{
         
         String checkFileQuery = "SELECT file_id FROM files WHERE filename = ? AND file_path = ?";
         String insertFileQuery = "INSERT INTO files (file_id, filename, file_length, crc32, file_path) VALUES (?, ?, ?, ?, ?)";
@@ -385,7 +385,7 @@ public class DB {
                 fileStmt.setString(1, generatedFileId);
                 fileStmt.setString(2, filename);
                 fileStmt.setLong(3, fileLength);
-                fileStmt.setInt(4, crc32);
+                fileStmt.setLong(4, crc32);
                 fileStmt.setString(5, filePath);
                 fileStmt.executeUpdate();
             }
@@ -405,7 +405,7 @@ public class DB {
         }
     } 
     
-    public void updateFileForUser(String fileID, String newFileName, long newFileLenght, String newCrc32, String newFilePath) throws ClassNotFoundException, SQLException{
+    public void updateFileForUser(String fileID, String newFileName, long newFileLenght, long newCrc32, String newFilePath) throws ClassNotFoundException, SQLException{
         String updateFileQuery = "UPDATE files SET filename = ?, file_length = ?, crc32 = ?, file_path = ? WHERE file_id = ?";
         
         try {
@@ -417,7 +417,7 @@ public class DB {
 
             fileStm.setString(1, newFileName);
             fileStm.setLong(2, newFileLenght);
-            fileStm.setString(3, newCrc32);
+            fileStm.setLong(3, newCrc32);
             fileStm.setString(4, newFilePath);
             fileStm.setString(5, fileID);
             fileStm.executeUpdate();
@@ -463,24 +463,22 @@ public class DB {
         }
     }
     
-    public void addChunkMetaData(String chunkId, String fileId, String containerId) throws ClassNotFoundException{
-        String sql = "INSERT INTO chunks (chunk_id, file_id, container_id) VALUES (?, ?, ?)";
-        
+    public void addChunkMetaData(String chunkId, String fileId, String containerId, int chunkIndex) throws ClassNotFoundException{
+        String sql = "INSERT INTO chunks (chunk_id, file_id, container_id, chunk_index) VALUES (?, ?, ?, ?)";
         try {
-            
             if (connection == null) {
-            connection = initConnection();
-                }
-            
-            try(PreparedStatement pstmt = connection.prepareStatement(sql)){
-            pstmt.setString(1, chunkId);
-            pstmt.setString(2, fileId);
-            pstmt.setString(3, containerId);
-            pstmt.executeUpdate();
+                connection = initConnection();
+            }
+            try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+                pstmt.setString(1, chunkId);
+                pstmt.setString(2, fileId);
+                pstmt.setString(3, containerId);
+                pstmt.setInt(4, chunkIndex);
+                pstmt.executeUpdate();
             }
         } catch(SQLException e) {
             e.printStackTrace();
-            System.err.println("❌Failed to add chunk metadata for chunk: " + chunkId);
+            System.err.println("Failed to add chunk metadata for chunk: " + chunkId);
         }
     }
     
@@ -570,7 +568,7 @@ public class DB {
     public List<String> getChunksForFile(String fileId) throws SQLException, ClassNotFoundException {
             
         List<String> chunks = new ArrayList<>();
-        String query = "SELECT chunk_id FROM chunks WHERE file_id = ?";
+            String query = "SELECT chunk_id FROM chunks WHERE file_id = ? ORDER BY chunk_index ASC";
 
             if (connection == null) {
                 connection = initConnection();
@@ -580,13 +578,13 @@ public class DB {
                 pstmt.setString(1, fileId);
                 try (ResultSet rs = pstmt.executeQuery()) {
                     while (rs.next()) {
-                    String chunkId = rs.getString("chunk_id");
-                    chunks.add(chunkId);
+                        String chunkId = rs.getString("chunk_id");
+                        chunks.add(chunkId);
+                    }
                 }
+            } catch (SQLException e) {
+                e.printStackTrace();
             }
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
             return chunks;
         }
     

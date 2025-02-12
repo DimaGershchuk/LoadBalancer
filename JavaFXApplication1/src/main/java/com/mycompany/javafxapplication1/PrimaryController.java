@@ -84,6 +84,9 @@ public class PrimaryController {
             int userId = myObj.getUserId(username);
             if (role != null) {
                 
+                LocalDB localDB = new LocalDB();
+                localDB.insertSession(userId, username, role);
+                
                 FXMLLoader loader = new FXMLLoader();
                 Parent root;
 

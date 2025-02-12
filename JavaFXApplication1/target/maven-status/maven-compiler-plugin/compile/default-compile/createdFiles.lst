@@ -18,7 +18,6 @@ com/mycompany/javafxapplication1/SessionManager$1.class
 com/mycompany/javafxapplication1/Response.class
 com/mycompany/javafxapplication1/FileLockManager.class
 com/mycompany/javafxapplication1/SecondaryController.class
-com/mycompany/javafxapplication1/FileDecryption.class
 com/mycompany/javafxapplication1/RegisterController.class
 com/mycompany/javafxapplication1/LoadBalancer$TrafficLevel.class
 com/mycompany/javafxapplication1/MQTTClient$1.class

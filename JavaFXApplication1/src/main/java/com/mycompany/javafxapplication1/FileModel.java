@@ -17,14 +17,14 @@ public class FileModel {
     private SimpleStringProperty file_id;
     private SimpleStringProperty filename;
     private SimpleLongProperty file_length;
-    private SimpleIntegerProperty crc32;
+    private SimpleLongProperty crc32;
     private SimpleStringProperty file_path;
 
-    public FileModel(String file_id, String filename, long file_length, int crc32, String file_path) {
+    public FileModel(String file_id, String filename, long file_length, long crc32, String file_path) {
         this.file_id = new SimpleStringProperty(file_id);
         this.filename = new SimpleStringProperty(filename);
         this.file_length = new SimpleLongProperty(file_length);
-        this.crc32 = new SimpleIntegerProperty(crc32);
+        this.crc32 = new SimpleLongProperty(crc32);
         this.file_path = new SimpleStringProperty(file_path);
     }
 
@@ -44,11 +44,11 @@ public class FileModel {
         this.file_length.set(file_length);
     }
 
-    public int getCrc32() {
+    public Long getCrc32() {
         return crc32.get();
     }
 
-    public void setCrc32(int crc32) {
+    public void setCrc32(long crc32) {
         this.crc32.set(crc32);
     }
 

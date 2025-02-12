@@ -34,6 +34,8 @@ public class App extends Application {
             
             //SessionManager sessionManager = new SessionManager(secondaryStage);
             //sessionManager.startSessionTracking(scene);
+            
+            
     
 
         } catch (Exception e) {

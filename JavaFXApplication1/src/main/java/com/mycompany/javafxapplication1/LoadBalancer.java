@@ -9,6 +9,7 @@ import java.nio.file.Files;
 import org.eclipse.paho.client.mqttv3.*;
 import java.sql.SQLException;
 import java.util.concurrent.ConcurrentHashMap;
+import net.lingala.zip4j.ZipFile;
 
 
 
@@ -54,7 +55,7 @@ public class LoadBalancer{
         this.random = new Random();
         this.maxConcurrentRequests = maxConcurrentRequests;
         this.db = new DB();
-        this.fileChunking = new FileChunking(this);
+        this.fileChunking = new FileChunking(this, "pasword");
         
         
 
@@ -260,54 +261,80 @@ public class LoadBalancer{
     
     private void downloadChunks(Request request) throws IOException, InterruptedException{
         
-         while (true) {
-             
-            Request.Status status = fileOperationStatus.get(request.getFileId());
-            if (status == null || status == Request.Status.COMPLETED) {
-                break;
-            } else if (status == Request.Status.FAILED) {
-                System.out.println("Previous operation for file " + request.getFileId() + " failed. Aborting download.");
-                return;
-            } else {
-                System.out.println("Waiting for previous operation to complete for file: " + request.getFileId());
-                Thread.sleep(1000);
+    while (true) {
+        Request.Status status = fileOperationStatus.get(request.getFileId());
+        if (status == null || status == Request.Status.COMPLETED) {
+            break;
+        } else if (status == Request.Status.FAILED) {
+            System.out.println("Попередня операція для файлу " + request.getFileId() + " завершилася з помилкою. Завантаження скасовано.");
+            return;
+        } else {
+            System.out.println("Очікуємо завершення попередньої операції для файлу: " + request.getFileId());
+            Thread.sleep(1000);
+        }
+    }
+    
+    fileOperationStatus.put(request.getFileId(), Request.Status.IN_PROGRESS);
+    FileLockManager.lockFile(request.getFileId());
+
+    try {
+        // Якщо список чанків порожній, завантажуємо його з бази
+        if (request.getChunks() == null || request.getChunks().isEmpty()) {
+            List<String> chunksFromDb = db.getChunksForFile(request.getFileId());
+            if (chunksFromDb != null) {
+                request.getChunks().addAll(chunksFromDb);
             }
         }
-    
-        fileOperationStatus.put(request.getFileId(), Request.Status.IN_PROGRESS);
-        FileLockManager.lockFile(request.getFileId());
 
-        try {
-            
-            if (request.getChunks() == null || request.getChunks().isEmpty()) {
-                List<String> chunksFromDb = db.getChunksForFile(request.getFileId());
-                if (chunksFromDb != null) {
-                    request.getChunks().addAll(chunksFromDb);
-                }
+        List<String> chunks = request.getChunks();
+        List<String> localChunkPaths = new ArrayList<>();
+        String tempFolder = "/home/ntu-user/Downloads/"; 
+
+
+        for (String chunk : chunks) {
+            String localPath = tempFolder + chunk;
+            Container container = selectContainerForChunk(chunk);
+            if (container != null) {
+                container.downloadChunk(chunk, localPath);
+                System.out.println("Download chunk " + chunk + " from " + container.getId());
+                localChunkPaths.add(localPath);
+            } else {
+                System.err.println("Container for " + chunk + " not found.");
             }
-            
-            List<String> chunks = request.getChunks();
-            for (String chunk : chunks) {
-                Container container = selectContainerForChunk(chunk);
-                if (container != null) {
-                    container.downloadChunk(chunk, "/home/ntu-user/Downloads/" + chunk);
-                    System.out.println("Downloaded chunk " + chunk + " from " + container.getId());
-                } else {
-                    System.err.println("Container not found for chunk: " + chunk);
-                }
-            }
-            combineChunks(chunks, request.getFileId());
-            fileOperationStatus.put(request.getFileId(), Request.Status.COMPLETED);
-            
+        }
+
+        String combinedZipFilePath = tempFolder + request.getFileId() + ".zip";
+        combineChunks(localChunkPaths, combinedZipFilePath);
+
+        String unzipDestination = tempFolder + request.getFileId() + "_unzipped";
+        
+        ZipFile zipFile = new ZipFile(combinedZipFilePath, fileChunking.getZipPassword().toCharArray());
+        zipFile.extractAll(unzipDestination);
+        System.out.println("File unziped in: " + unzipDestination);
+
+        fileOperationStatus.put(request.getFileId(), Request.Status.COMPLETED);
+
         } catch (Exception e) {
             e.printStackTrace();
             fileOperationStatus.put(request.getFileId(), Request.Status.FAILED);
-            
         } finally {
             FileLockManager.unlockFile(request.getFileId());
             fileOperationStatus.remove(request.getFileId());
         }
     }
+    
+    public void combineChunks(List<String> chunks, String ouptpuFilePath) throws FileNotFoundException, IOException{
+        
+        try(FileOutputStream fos = new FileOutputStream(ouptpuFilePath)){
+            for(String chunkPath : chunks){
+                File chunkFile = new File(chunkPath);
+                Files.copy(chunkFile.toPath(), fos);
+                chunkFile.delete();
+            }
+        } catch (IOException e) {
+            System.err.println("Failed to combine chunks for file " + ouptpuFilePath);
+            e.printStackTrace();
+    }}
     
     private void updateChunks(Request request) throws SQLException, ClassNotFoundException, IOException, FileNotFoundException, Exception{
         
@@ -391,23 +418,7 @@ public class LoadBalancer{
             e.printStackTrace();
         }
     }
-    
-    
-        
 
-    public void combineChunks(List<String> chunks, String fileId) throws FileNotFoundException, IOException{
-        
-        try(FileOutputStream fos = new FileOutputStream("/home/ntu-user/Downloads/" + fileId)){
-            for(String chunk : chunks){
-                File chunkFile = new File("/home/ntu-user/Downloads/" + chunk);
-                Files.copy(chunkFile.toPath(), fos);
-                chunkFile.delete();
-            }
-        } catch (IOException e) {
-            System.err.println("Failed to combine chunks for file " + fileId);
-            e.printStackTrace();
-    }}
-    
        
 
     public void addRequest(Request request) throws JSchException, IOException, SftpException, SQLException, ClassNotFoundException{
@@ -445,22 +456,28 @@ public class LoadBalancer{
      private void processRequests() throws JSchException, IOException, SftpException, SQLException, ClassNotFoundException, InterruptedException, Exception {
          
         synchronized (waitingQueue) {
-            
-        while (!waitingQueue.isEmpty() && processingQueue.size() < maxConcurrentRequests) {
+        if (processingQueue.isEmpty() && !waitingQueue.isEmpty()) {
             Task nextTask = selectNextTask();
             if (nextTask != null) {
-
                 waitingQueue.remove(nextTask);
-                processingQueue.add(nextTask);
-                executeTask(nextTask);
-            } else {
-                break;
+                nextTask.resetStartTime();
+                synchronized (processingQueue) {
+                    processingQueue.add(nextTask);
+                    System.out.println("Moved Task " + nextTask.getName() + " from Waiting Queue to Processing Queue.");
+                }
             }
         }
     }
-
- 
-
+        synchronized (processingQueue) {
+            if (!processingQueue.isEmpty()) {
+                Task currentTask = processingQueue.peek(); 
+                if (currentTask.isReady()) {
+                    executeTask(currentTask);
+                    processingQueue.remove(currentTask);
+                    System.out.println("Task " + currentTask.getName() + " has been finished and moved to Ready Queue");
+                }
+            }
+        }
         showQueueStatus();
     }
      
@@ -472,6 +489,25 @@ public class LoadBalancer{
             readyQueue.add(task);
         }
                 System.out.println("Request completed: " + task.getRequest().getFileId());
+    }
+     
+     private void executeTask(Task task) throws JSchException, IOException, SftpException, SQLException, ClassNotFoundException, InterruptedException, Exception {
+        Request request = task.getRequest();
+        switch (request.getOperationType()) {
+            case UPLOAD:
+                uploadFile(request);
+                break;
+            case UPDATE:
+                updateChunks(request);
+                break;
+            case DELETE:
+                deleteChunks(request);
+                break;
+            case DOWNLOAD:
+                downloadChunks(request);
+                break;
+        }
+        finalizeRequest(task);
     }
      
      private void adjustSchedulingAlgorithm() {
@@ -501,7 +537,7 @@ public class LoadBalancer{
     
         List<Task> readyTasks = new ArrayList<>();
         for (Task t : waitingQueue) {
-            if (t != null && t.isReady()) {
+            if (t != null) {
                 readyTasks.add(t);
             }
         }
@@ -512,7 +548,7 @@ public class LoadBalancer{
         switch (schedulingAlgorithm) {
             case FCFS:
                 for (Task t : waitingQueue) {
-                    if (t != null && t.isReady()) {
+                    if (t != null) {
                         return t;
                     }
                 }
@@ -533,24 +569,7 @@ public class LoadBalancer{
 
     
     
-    private void executeTask(Task task) throws JSchException, IOException, SftpException, SQLException, ClassNotFoundException, InterruptedException, Exception {
-        Request request = task.getRequest();
-        switch (request.getOperationType()) {
-            case UPLOAD:
-                uploadFile(request);
-                break;
-            case UPDATE:
-                updateChunks(request);
-                break;
-            case DELETE:
-                deleteChunks(request);
-                break;
-            case DOWNLOAD:
-                downloadChunks(request);
-                break;
-        }
-        finalizeRequest(task);
-    }
+    
 
     public Container roundRobin() {
         List<Container> healthyContainers = getHealthyContainers();

@@ -4,14 +4,20 @@
  */
 package com.mycompany.javafxapplication1;
 
-import java.io.File;
-import javax.crypto.*;
-import java.io.*;
-import java.nio.file.*;
-import java.security.*;
-import java.util.*;
-import javax.crypto.spec.SecretKeySpec;
+import net.lingala.zip4j.ZipFile;
+import net.lingala.zip4j.exception.ZipException;
+import net.lingala.zip4j.model.ZipParameters;
+import net.lingala.zip4j.model.enums.CompressionLevel;
+import net.lingala.zip4j.model.enums.EncryptionMethod;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.UUID;
 
 /**
  *
@@ -20,77 +26,61 @@ import javax.crypto.spec.SecretKeySpec;
 public class FileChunking {
     
     private LoadBalancer loadBalancer;
+    private String zipPassword; // пароль для zip-файлу
 
-    public FileChunking(LoadBalancer loadBalancer) {
-        this.loadBalancer = loadBalancer; 
+    public FileChunking(LoadBalancer loadBalancer, String zipPassword) {
+        this.loadBalancer = loadBalancer;
+        this.zipPassword = zipPassword;
     }
 
-        public List<String> chunkFile(File inputFile, String outputDir, int numberChunks, String fileId) throws NoSuchAlgorithmException, FileNotFoundException, IOException, ClassNotFoundException, Exception {
+    public List<String> chunkFile(File inputFile, String outputDir, int numberChunks, String fileId) throws Exception {
         
-        DB db = new DB();    
-            
+        DB db = new DB();
         List<String> chunkNames = new ArrayList<>();
-        
-        KeyGenerator keyGen = KeyGenerator.getInstance("AES");
-        keyGen.init(256);
-        SecretKey secretKey = keyGen.generateKey();
-        
-        byte[] encryptedFileBytes = encryptFile(inputFile.getAbsolutePath(), secretKey);
-        
-        byte[] encryptedKeyBytes = encryptKey(secretKey);
-        
-        String encryptedKey = Base64.getEncoder().encodeToString(encryptedKeyBytes);
-        
-        db.storeEncryptionKey(fileId, encryptedKey);
-        
-        long fileLength = encryptedFileBytes.length;
-        
+
+        String zipFilePath = outputDir + File.separator + fileId + ".zip";
+        createEncryptedZip(inputFile, zipFilePath, zipPassword);
+
+        byte[] zipBytes = Files.readAllBytes(Paths.get(zipFilePath));
+        long fileLength = zipBytes.length;
         int chunkSize = (int) Math.ceil((double) fileLength / numberChunks);
-        
-        File dir = new File(outputDir);
-        if (!dir.exists()) {
-            dir.mkdir();
+
+        File chunksDir = new File(outputDir);
+        if (!chunksDir.exists()) {
+            chunksDir.mkdirs();
         }
-        
-          // Список для збереження імен чанків
-        
+
         for (int i = 0; i < numberChunks; i++) {
             int start = i * chunkSize;
-            int end = Math.min(start + chunkSize, encryptedFileBytes.length);
-            byte[] chunk = Arrays.copyOfRange(encryptedFileBytes, start, end);
+            int end = Math.min(start + chunkSize, zipBytes.length);
+            byte[] chunk = Arrays.copyOfRange(zipBytes, start, end);
 
             String chunkName = UUID.randomUUID().toString();
-            File chunkFile = new File(outputDir, chunkName);
-            
+            File chunkFile = new File(chunksDir, chunkName);
             try (FileOutputStream fos = new FileOutputStream(chunkFile)) {
                 fos.write(chunk);
             }
-            
 
             Container selectedContainer = loadBalancer.roundRobin();
             String containerId = selectedContainer.getId();
-            
-            db.addChunkMetaData(chunkName, fileId, containerId);
-            
+            db.addChunkMetaData(chunkName, fileId, containerId, i);
             chunkNames.add(chunkName);
         }
         System.out.println("Completed chunking for file: " + fileId);
-        return chunkNames; 
+        return chunkNames;
     }
 
-    private static byte[] encryptFile(String inputFile, SecretKey key) throws Exception {
-        Cipher cipher = Cipher.getInstance("AES");
-        cipher.init(Cipher.ENCRYPT_MODE, key);
-        byte[] fileBytes = Files.readAllBytes(Paths.get(inputFile));
-        return cipher.doFinal(fileBytes);
+    private void createEncryptedZip(File inputFile, String zipFilePath, String password) throws ZipException {
+        ZipParameters zipParameters = new ZipParameters();
+        zipParameters.setEncryptFiles(true);
+        zipParameters.setCompressionLevel(CompressionLevel.MAXIMUM);
+        zipParameters.setEncryptionMethod(EncryptionMethod.AES);
+        ZipFile zipFile = new ZipFile(zipFilePath, password.toCharArray());
+        zipFile.addFile(inputFile, zipParameters);
+        System.out.println("Encrypted zip file created: " + zipFilePath);
     }
-
-    private static byte[] encryptKey(SecretKey key) throws Exception {
-        Cipher cipher = Cipher.getInstance("RSA");
-        KeyPairGenerator keyPairGen = KeyPairGenerator.getInstance("RSA");
-        keyPairGen.initialize(2048);
-        PublicKey publicKey = keyPairGen.generateKeyPair().getPublic();
-        cipher.init(Cipher.ENCRYPT_MODE, publicKey);
-        return cipher.doFinal(key.getEncoded());
+    
+    public String getZipPassword() {
+        return zipPassword;
     }
 }

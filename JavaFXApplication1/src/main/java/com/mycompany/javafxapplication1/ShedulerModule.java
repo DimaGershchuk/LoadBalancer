@@ -17,38 +17,46 @@ public class ShedulerModule {
     
     
     private final List<Task> tasks;
-    private final int numResources;
+    private final int numResources; // Цей параметр можна використовувати для розподілу завдань між ресурсами
 
     public ShedulerModule(Collection<Task> tasks, int numResources) {
         this.tasks = new ArrayList<>(tasks);
         this.numResources = numResources;
     }
 
+    // Симуляція FCFS (First Come First Serve) – обробляються завдання у тому порядку, в якому вони прийшли
     public long simulateFCFS() {
-        long totalTime = 0;
+        long totalCompletionTime = 0;
+        long currentTime = 0;
+        // Завдання обробляються у порядку їх появи (як у tasks)
         for (Task task : tasks) {
-            totalTime += task.getDelay();
+            currentTime += task.getDelay();  // finish time для поточного завдання
+            totalCompletionTime += currentTime;
         }
-        return totalTime / 1000; 
+        return totalCompletionTime / 1000; // повертаємо час у секундах
     }
 
+    // Симуляція SJF (Shortest Job First) – завдання спочатку з найменшим часом обробки
     public long simulateSJF() {
-        
         List<Task> sjfList = new ArrayList<>(tasks);
-        sjfList.sort(Comparator.comparingLong(Task::getDelay)); 
-        long totalTime = 0;
+        // Сортуємо завдання за збільшенням часу обробки (delay)
+        sjfList.sort(Comparator.comparingLong(Task::getDelay));
+        long totalCompletionTime = 0;
+        long currentTime = 0;
         for (Task task : sjfList) {
-            totalTime += task.getDelay();
+            currentTime += task.getDelay();
+            totalCompletionTime += currentTime;
         }
-        return totalTime / 1000; 
+        return totalCompletionTime / 1000;
     }
 
+    // Симуляція PRIORITY – загальний "ефективний час" з урахуванням пріоритету
     public long simulatePriority() {
         long totalEffectiveTime = 0;
         for (Task task : tasks) {
-
-        totalEffectiveTime += task.getDelay() * task.getRequest().getPriority();
-    }
-    return totalEffectiveTime / 1000; 
+            // Чим менше значення priority, тим вищий пріоритет (наприклад, якщо priority = 1 – найвищий)
+            totalEffectiveTime += task.getDelay() * task.getRequest().getPriority();
+        }
+        return totalEffectiveTime / 1000;
     }
 }

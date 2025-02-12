@@ -135,6 +135,26 @@ public class FileselectionController {
     public FileselectionController() throws MqttException {  
         this.mqttClient = new MQTTClient();
     }
+    
+    @FXML
+    private void onFileSelect(){
+
+        FileModel selectedFile = (FileModel) fileTableView.getSelectionModel().getSelectedItem();
+
+        if (selectedFile != null) {
+        try {
+            Path filePath = Paths.get(selectedFile.getFilePath());
+            String content = Files.readString(filePath, StandardCharsets.UTF_8);
+            fileTextArea.setText(content);
+        } catch (IOException e) {
+            e.printStackTrace();
+            showAlert("Error", "Failed to load file content.", Alert.AlertType.ERROR);
+        }
+    } else {
+        fileTextArea.clear();
+        showAlert("Warning", "Please select a file from the table.", Alert.AlertType.WARNING);
+        }
+    }
             
    
     @FXML
@@ -175,7 +195,7 @@ public class FileselectionController {
             String filename = selectedFile.getName();
             long fileLength = selectedFile.length();
             String filePath = selectedFile.getAbsolutePath();
-            int crc32 = calculateCRC32(fileContent.toString());
+            long crc32 = calculateCRC32(fileContent.toString());
             
             DB db = new DB();
             String fileId = db.addFileToUser(filename, fileLength, crc32, filePath,  this.userId);
@@ -193,16 +213,16 @@ public class FileselectionController {
     }
    
         
-
-    private int calculateCRC32(String content) {
+    private long calculateCRC32(String content) {
         try {
             CRC32 crc32 = new CRC32();
             crc32.update(content.getBytes(StandardCharsets.UTF_8));
-            return (int) crc32.getValue();
+            return crc32.getValue();
         } catch (Exception e) {
             e.printStackTrace();
-            return 0;
-    }}
+            return 0L;
+        }
+    }
     
     @FXML
     private void createFileHandler(ActionEvent event) throws FileNotFoundException, Exception {
@@ -231,7 +251,7 @@ public class FileselectionController {
                     writer.close();
 
                     long fileLength = newFile.length();
-                    int crc32 = calculateCRC32(content);
+                    long crc32 = calculateCRC32(content);
 
                     String filePath = newFile.getAbsolutePath();
                     String fileId = db.addFileToUser(fileName, fileLength, crc32, filePath, this.userId);
@@ -249,14 +269,14 @@ public class FileselectionController {
                 }
             }
 
-        } catch (IOException | SQLException | ClassNotFoundException e) {
+        } catch (IOException e) {
             e.printStackTrace();
             showAlert("Error", "Failed to create the file.", Alert.AlertType.ERROR);
         }
     }
 
     @FXML
-    private void updateFileHandler(ActionEvent event) throws IOException, ClassNotFoundException, MqttException {
+    private void updateFileHandler(ActionEvent event) throws IOException, ClassNotFoundException, MqttException, SQLException {
         
     FileModel selectedFile = (FileModel) fileTableView.getSelectionModel().getSelectedItem();
 
@@ -274,16 +294,16 @@ public class FileselectionController {
             Path filePath = Paths.get(selectedFile.getFilePath());
             Files.writeString(filePath, updatedContent, StandardCharsets.UTF_8);
             long newFileLength = Files.size(filePath);
-            int newCrc32 = calculateCRC32(updatedContent); 
+            long newCrc32 = calculateCRC32(updatedContent); 
             
-            Request request = new Request(userId, selectedFile.getFileId(), Request.OperationType.UPDATE, newFileLength, 1, new ArrayList<>(), filePath.toString());
+            Request request = new Request(userId, selectedFile.getFileId(), Request.OperationType.UPDATE, newFileLength, 2, new ArrayList<>(), filePath.toString());
             mqttClient.sendRequest(request);
             
             db.updateFileForUser(
                 selectedFile.getFileId(),
                 selectedFile.getFilename(),
                 newFileLength,
-                String.valueOf(newCrc32),
+                newCrc32,
                 selectedFile.getFilePath()
             );
 
@@ -292,7 +312,7 @@ public class FileselectionController {
             fileTableView.refresh();
 
             showAlert("Success", "File updated successfully!", Alert.AlertType.INFORMATION);
-        } catch (IOException | SQLException e) {
+        } catch (IOException e) {
             e.printStackTrace();
             showAlert("Error", "Failed to update the file.", Alert.AlertType.ERROR);
         }
@@ -323,14 +343,14 @@ public class FileselectionController {
             try {
 
 
-                List<String> chunks = db.getChunksForFile(selectedFile.getFileId());
-                Request deleteRequest = new Request(userId, selectedFile.getFileId(), Request.OperationType.DELETE, 0, 3, chunks, selectedFile.getFilePath());
+                //List<String> chunks = db.getChunksForFile(selectedFile.getFileId());
+                Request deleteRequest = new Request(userId, selectedFile.getFileId(), Request.OperationType.DELETE, 0, 3, null, selectedFile.getFilePath());
                 mqttClient.sendRequest(deleteRequest);
                 
                 mqttClient.subscribeToDeletionConfirmation(selectedFile.getFileId(), () -> {
                     try {
                         
-                        System.out.println("✅Deleting file from DB after chunk deletion: " + selectedFile.getFileId());
+                        System.out.println("Deleting file from DB after chunk deletion: " + selectedFile.getFileId());
                         db.deleteFileForUser(selectedFile.getFileId(), this.userId);
                         
                         Platform.runLater(() -> fileTableView.getItems().remove(selectedFile));
@@ -393,7 +413,7 @@ public class FileselectionController {
         if (selectedFile != null) {
             try {
 
-                List<String> chunks = db.getChunksForFile(selectedFile.getFileId());
+               // List<String> chunks = db.getChunksForFile(selectedFile.getFileId());
 
                 Request request = new Request(userId, selectedFile.getFileId(), Request.OperationType.DOWNLOAD, selectedFile.getFileLength(), 2, null, selectedFile.getFilePath());
 
