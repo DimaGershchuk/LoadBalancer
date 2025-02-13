@@ -5,7 +5,6 @@
 package com.mycompany.javafxapplication1;
 
 import javafx.application.Platform;
-import javafx.event.EventHandler;
 import javafx.scene.Scene;
 import javafx.stage.Stage;
 
@@ -22,7 +21,7 @@ import javafx.scene.input.MouseEvent;
  */
 public class SessionManager {
     
-    private static final long TIMEOUT = 60 * 1000; // 50 секунд
+    private static final long TIMEOUT = 60 * 1000;
     private Timer inactivityTimer;
     private final Stage primaryStage;
 
@@ -41,7 +40,6 @@ public class SessionManager {
         resetInactivityTimer();
     }
 
-    // Додає слухачі подій до сцени для відстеження активності
     public void startSessionTracking(Scene scene) {
         scene.addEventFilter(MouseEvent.ANY, event -> resetInactivityTimer());
         scene.addEventFilter(KeyEvent.ANY, event -> resetInactivityTimer());

@@ -6,7 +6,6 @@ package com.mycompany.javafxapplication1;
 
 import javafx.beans.property.SimpleLongProperty;
 import javafx.beans.property.SimpleStringProperty;
-import javafx.beans.property.SimpleIntegerProperty;
 
 /**
  *

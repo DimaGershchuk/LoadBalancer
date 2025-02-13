@@ -5,9 +5,6 @@
 package com.mycompany.javafxapplication1;
 import org.eclipse.paho.client.mqttv3.*;
 import com.google.gson.Gson;
-import com.jcraft.jsch.JSchException;
-import com.jcraft.jsch.SftpException;
-import java.io.IOException;
 /**
  *
  * @author ntu-user
@@ -69,6 +66,7 @@ public class MQTTClient {
             MqttMessage message = new MqttMessage(jsonRequest.getBytes());
             client.publish("load-balancer/file-operation", message);
             System.out.println("Sent MQTT request: " + jsonRequest);
+            
         } catch (MqttException e) {
             e.printStackTrace();
             System.err.println("Failed to send MQTT request: " + e.getMessage());
@@ -115,11 +113,11 @@ public class MQTTClient {
     }
     
     public void reconnect() {
-    try {
-        client.reconnect();
-        System.out.println("Reconnected to MQTT broker.");
-    } catch (MqttException e) {
-        System.err.println("Failed to reconnect to MQTT broker: " + e.getMessage());
+        try {
+            client.reconnect();
+            System.out.println("Reconnected to MQTT broker.");
+        } catch (MqttException e) {
+            System.err.println("Failed to reconnect to MQTT broker: " + e.getMessage());
+        }
     }
-}
 }

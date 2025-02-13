@@ -38,7 +38,6 @@ public class DB {
     private String username = "root"; 
     private String password = "280104";
     private int timeout = 30;
-    private String dataBaseName = "Coursework";
     private String dataBaseTableName = "users";
     private Connection connection = null;
     private Random random = new SecureRandom();
@@ -108,6 +107,11 @@ public class DB {
             pstmt.setString(2, generateSecurePassword(password));
             pstmt.setString(3, role);
             pstmt.executeUpdate();
+            
+            //ObservableList<User> remoteUsers = getUserData();
+            //LocalDB localDb = new LocalDB();
+            //localDb.syncUsers(remoteUsers);
+            
         } catch (SQLException ex) {
             Logger.getLogger(DB.class.getName()).log(Level.SEVERE, null, ex);
         }
@@ -397,6 +401,11 @@ public class DB {
             }
 
             System.out.println("New file added with file_id: " + generatedFileId);
+            
+            //ObservableList<FileModel> remoteFiles = getFiles();
+            //LocalDB localDb = new LocalDB();
+            //localDb.syncFiles(remoteFiles);
+        
             return generatedFileId;
 
         } catch (SQLException e) {
@@ -613,29 +622,7 @@ public class DB {
 
         return chunks;  
     }
-    
-       public void storeEncryptionKey(String fileId, String encryptedKey) throws SQLException {
-        String sql = "INSERT INTO encryption_keys (file_id, encryption_key) VALUES (?, ?)";
-        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
-            pstmt.setString(1, fileId);
-            pstmt.setString(2, encryptedKey);
-            pstmt.executeUpdate();
-        }
-    }
-
-        public String getEncryptionKey(String fileId) throws SQLException {
-            String sql = "SELECT encryption_key FROM encryption_keys WHERE file_id = ?";
-            try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
-                pstmt.setString(1, fileId);
-                try (ResultSet rs = pstmt.executeQuery()) {
-                    if (rs.next()) {
-                        return rs.getString("encryption_key");
-                    }
-                }
-            }
-            return null;
-        }
-    
+     
     public void logMqttRequest(int userId, String requestId, String operationType, String details) {
         
         String query = "INSERT INTO mqtt_logs (user_id, request_id, operation_type, details) VALUES (?, ?, ?, ?)";

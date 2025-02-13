@@ -4,10 +4,7 @@
  */
 package com.mycompany.javafxapplication1;
 import java.sql.*;
-import java.util.ArrayList;
 import java.util.List;
-import javafx.collections.FXCollections;
-import javafx.collections.ObservableList;
 /** 
  *
  * @author ntu-user

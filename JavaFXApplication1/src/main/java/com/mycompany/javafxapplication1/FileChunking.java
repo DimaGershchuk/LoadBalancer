@@ -26,7 +26,7 @@ import java.util.UUID;
 public class FileChunking {
     
     private LoadBalancer loadBalancer;
-    private String zipPassword; // пароль для zip-файлу
+    private String zipPassword;
 
     public FileChunking(LoadBalancer loadBalancer, String zipPassword) {
         this.loadBalancer = loadBalancer;

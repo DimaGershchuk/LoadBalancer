@@ -24,7 +24,6 @@ com/mycompany/javafxapplication1/MQTTClient$1.class
 com/mycompany/javafxapplication1/FileModel.class
 com/mycompany/javafxapplication1/Request.class
 com/mycompany/javafxapplication1/LoadBalancer.class
-com/mycompany/javafxapplication1/DatabaseSynchronizer.class
 com/mycompany/javafxapplication1/PrimaryController.class
 com/mycompany/javafxapplication1/App.class
 com/mycompany/javafxapplication1/LoadBalancer$1.class
@@ -32,3 +31,4 @@ com/mycompany/javafxapplication1/CreateUserFormController.class
 com/mycompany/javafxapplication1/User.class
 com/mycompany/javafxapplication1/UpdateUserFormController.class
 com/mycompany/javafxapplication1/MQTTClient.class
+com/mycompany/javafxapplication1/PerfomanceMetrics.class

@@ -21,7 +21,6 @@ public class AclEntry {
         this.canWrite = canWrite;
     }
 
-    // Геттери
     public String getFileId() {
         return fileId;
     }

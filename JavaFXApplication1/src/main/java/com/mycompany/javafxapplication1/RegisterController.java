@@ -4,8 +4,6 @@
  */
 package com.mycompany.javafxapplication1;
 
-import java.io.File;
-import java.io.IOException;
 import java.util.Optional;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
@@ -19,10 +17,7 @@ import javafx.scene.control.ButtonType;
 import javafx.scene.control.PasswordField;
 import javafx.scene.control.RadioButton;
 import javafx.scene.control.TextField;
-import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
-import javafx.scene.text.Text;
-import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
 /**
@@ -97,7 +92,6 @@ public class RegisterController {
 
             String[] credentials = {userTextField.getText(), passPasswordField.getText()};
 
-            // Завантажуємо FXML і отримуємо контролера після завантаження
             if (userRole.equals("admin")) {
                 loader.setLocation(getClass().getResource("secondary.fxml"));
                 Parent root = loader.load();

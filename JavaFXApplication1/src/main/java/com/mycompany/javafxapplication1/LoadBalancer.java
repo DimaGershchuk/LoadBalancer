@@ -44,6 +44,8 @@ public class LoadBalancer{
      
     private static final ConcurrentHashMap<String, Request.Status> fileOperationStatus = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<String, Long> fileOperationEndTime = new ConcurrentHashMap<>();
+    
+    private PerfomanceMetrics metrics = new PerfomanceMetrics();
      
 
     public LoadBalancer(List<Container> containers, int maxConcurrentRequests) {
@@ -236,6 +238,15 @@ public class LoadBalancer{
         FileLockManager.lockFile(request.getFileId());
 
         try {
+            
+             if (request.getChunks() == null || request.getChunks().isEmpty()) {
+                List<String> chunksFromDb = db.getChunksForFile(request.getFileId());
+                    if (chunksFromDb != null) {
+                        request.getChunks().addAll(chunksFromDb);
+                    }
+            }
+             
+             
             List<String> chunksToDelete = new ArrayList<>(request.getChunks());
             for (String chunk : chunksToDelete) {
                 Container container = selectContainerForChunk(chunk);
@@ -266,10 +277,9 @@ public class LoadBalancer{
         if (status == null || status == Request.Status.COMPLETED) {
             break;
         } else if (status == Request.Status.FAILED) {
-            System.out.println("Попередня операція для файлу " + request.getFileId() + " завершилася з помилкою. Завантаження скасовано.");
             return;
         } else {
-            System.out.println("Очікуємо завершення попередньої операції для файлу: " + request.getFileId());
+            System.out.println("Waiting for finishing last operation: " + request.getFileId());
             Thread.sleep(1000);
         }
     }
@@ -278,7 +288,6 @@ public class LoadBalancer{
     FileLockManager.lockFile(request.getFileId());
 
     try {
-        // Якщо список чанків порожній, завантажуємо його з бази
         if (request.getChunks() == null || request.getChunks().isEmpty()) {
             List<String> chunksFromDb = db.getChunksForFile(request.getFileId());
             if (chunksFromDb != null) {
@@ -493,6 +502,10 @@ public class LoadBalancer{
      
      private void executeTask(Task task) throws JSchException, IOException, SftpException, SQLException, ClassNotFoundException, InterruptedException, Exception {
         Request request = task.getRequest();
+        
+        long startTime = System.currentTimeMillis();
+        
+        
         switch (request.getOperationType()) {
             case UPLOAD:
                 uploadFile(request);
@@ -507,6 +520,27 @@ public class LoadBalancer{
                 downloadChunks(request);
                 break;
         }
+        
+        long duration = System.currentTimeMillis() - startTime;
+        
+        switch (request.getOperationType()) {
+            case UPLOAD:
+                metrics.recordUpload(duration);
+                break;
+            case UPDATE:
+                metrics.recordUpdate(duration);
+                break;
+            case DELETE:
+                metrics.recordDelete(duration);
+                break;
+            case DOWNLOAD:
+                metrics.recordDownload(duration);
+                break;
+                 
+             
+        }
+        
+        metrics.logMetrics();
         finalizeRequest(task);
     }
      
@@ -521,7 +555,7 @@ public class LoadBalancer{
 
         if (sjfTime <= fcfsTime && sjfTime <= priorityTime) {
             schedulingAlgorithm = SchedulingAlgorithm.SJF; 
-            System.out.println("Adjusted scheduling algorithm to SJN (Total time: " + sjfTime + "s vs FCFS: " + fcfsTime + "s vs Priority: " + priorityTime + "s).");
+            System.out.println("Adjusted scheduling algorithm to SJN (Total time SJN : " + sjfTime + "s vs FCFS: " + fcfsTime + "s vs Priority: " + priorityTime + "s).");
         } else if (fcfsTime <= sjfTime && fcfsTime <= priorityTime) {
             schedulingAlgorithm = SchedulingAlgorithm.FCFS;
             System.out.println("Adjusted scheduling algorithm to FCFS (Total time: " + fcfsTime + "s vs SJN: " + sjfTime + "s vs Priority: " + priorityTime + "s).");

@@ -5,9 +5,6 @@
 package com.mycompany.javafxapplication1;
 
 import com.jcraft.jsch.*;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.util.Scanner;
 /**
  *
  * @author ntu-user
