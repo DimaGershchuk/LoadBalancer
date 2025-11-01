@@ -3,6 +3,9 @@ improve performance, reliability, and scalability. In the context of the COMP200
 load balancer will play a crucial role in managing the workload across the four file storage
 containers within the simulated cloud infrastructure.
 
+<img width="910" height="813" alt="image" src="https://github.com/user-attachments/assets/7252df56-afd7-4424-b26f-07484b43e727" />
+
+
 Key functions of a load balancer in this coursework:
 • Receive incoming requests (e.g., file uploads, downloads) and distribute them evenly to the
 available file storage containers.
