@@ -1,1 +1,26 @@
-# SystemSoftware_CourseWork
+A load balancer is a cloud service that distributes network traffic across multiple servers to
+improve performance, reliability, and scalability. In the context of the COMP20081 project, the
+load balancer will play a crucial role in managing the workload across the four file storage
+containers within the simulated cloud infrastructure.
+Key functions of a load balancer in this coursework:
+• Receive incoming requests (e.g., file uploads, downloads) and distribute them evenly to the
+available file storage containers.
+• Help to prevent any single server from becoming overloaded, ensuring better overall
+performance and responsiveness.
+• Redirect traffic to the remaining healthy containers, minimising downtime and ensuring
+service continuity.
+• The load balancer can be configured to handle increasing workloads by adding more file
+storage containers to the infrastructure. This feature allows the system to scale up or down
+based on demand.
+The load balancer will employ at least three of the following scheduling algorithms: First-Come,
+First-Served (FCFS), Shortest-Job-Next (SJN), Priority Scheduling, Shortest Remaining Time,
+Round Robin (RR) and Multiple-Level Queues. The scheduling algorithms will be used to optimise
+resource allocation and handle concurrent file uploads, downloads, and deletions.
+Users will access the system through a Java and JavaFX-based portal. Standard users can create
+accounts, update their details, upload, download, share with read and/or write permissions and
+delete files. Admin users have additional privileges, including creating, updating, and deleting users
+and promoting standard users to admin.
+To simulate real-world scenarios, the load balancer will introduce artificial delays ranging from 30
+to 90 seconds to emulate the varying response times experienced by multiple users accessing cloud
+resources. Additionally, file containers will be locked during upload, download, and deletion
+operations to prevent concurrent access and ensure data integrity.
